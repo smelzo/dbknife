@@ -1,0 +1,8 @@
+node_modules/
+out/
+dist/
+e2e/output/
+.DS_Store
+out-*/
+.claude/worktrees/
+.vscode/

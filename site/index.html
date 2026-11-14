@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBKnife: SQL editor for MySQL, PostgreSQL, SQL Server and SQLite</title>
+<meta name="description" content="Free desktop app to write queries, edit data and manage MySQL, MariaDB, PostgreSQL, SQL Server and SQLite databases, on macOS, Windows and Linux.">
+<link rel="canonical" href="https://dbknife.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://dbknife.com/">
+<meta property="og:title" content="DBKnife">
+<meta property="og:description" content="Free desktop app to write queries, edit data and manage MySQL, MariaDB, PostgreSQL, SQL Server and SQLite databases.">
+<meta property="og:image" content="https://dbknife.com/screenshot.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" href="fonts/Schibsted-Grotesk/schibsted-grotesk-normal-400-800-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts/Schibsted-Grotesk/schibsted-grotesk.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+  <nav class="site-nav" aria-label="Main">
+    <ul class="site-nav__links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#download">Download</a></li>
+      <li><a href="https://github.com/smelzo/dbknife">GitHub</a></li>
+    </ul>
+  </nav>
+
+  <div class="hero__intro">
+    <div class="hero__brand">
+      <img class="hero__logo" src="logo.svg" alt="" width="1024" height="1024">
+      <h1 class="hero__name">DBKnife</h1>
+    </div>
+    <div class="hero__content">
+      <p class="hero__title">Write queries, edit data and run your database servers from one app.</p>
+      <p class="hero__lead">DBKnife is a free desktop app for MySQL, MariaDB, PostgreSQL, SQL Server and SQLite, on macOS, Windows and Linux.</p>
+
+      <div class="get" data-download="other">
+        <a class="button" href="#download">Download</a>
+        <p class="get__note">Free and open source, for macOS, Windows and Linux.</p>
+      </div>
+      <div class="get" data-download="mac" hidden>
+        <a class="button" href="https://github.com/smelzo/dbknife/releases/latest/download/DBKnife-mac-arm64.dmg">Download for Mac</a>
+        <p class="get__note">For Apple Silicon, macOS 12 or later. On an Intel Mac, <a href="https://github.com/smelzo/dbknife/releases/latest/download/DBKnife-mac-x64.dmg">download this version</a>.</p>
+      </div>
+      <div class="get" data-download="windows" hidden>
+        <a class="button" href="https://apps.microsoft.com/detail/9PHQ3Q8SM96J">Get it from Microsoft Store</a>
+        <p class="get__note">Windows 10 and 11, beta. Also as an <a href="https://github.com/smelzo/dbknife/releases/latest/download/DBKnife-win-x64-setup.exe">installer for x64</a>.</p>
+      </div>
+      <div class="get" data-download="linux" hidden>
+        <a class="button" href="https://github.com/smelzo/dbknife/releases/latest/download/DBKnife-linux-amd64.deb">Download for Debian and Ubuntu</a>
+        <p class="get__note">Linux x64, beta. For other distributions, the <a href="https://github.com/smelzo/dbknife/releases/latest/download/DBKnife-linux-x86_64.AppImage">AppImage</a>.</p>
+      </div>
+    </div>
+  </div>
+
+  <figure class="window">
+    <video class="window__video" data-demo muted loop playsinline preload="metadata" width="1920" height="1200" poster="media/editor.jpg"
+      aria-label="A query is written with the completion of table and column names, then run: the results appear in the grid below.">
+      <source src="media/editor.webm" type="video/webm">
+      <source src="media/editor.mp4" type="video/mp4">
+    </video>
+  </figure>
+</header>
+
+<main>
+  <section class="strip" aria-labelledby="works-with-title">
+    <svg width="0" height="0" aria-hidden="true" class="symbols">
+      <symbol id="database" viewBox="0 0 48 48">
+        <ellipse cx="24" cy="11" rx="15" ry="5.5" />
+        <path d="M9 11v26c0 3 6.7 5.5 15 5.5s15-2.5 15-5.5V11" />
+        <path d="M9 19.7c0 3 6.7 5.5 15 5.5s15-2.5 15-5.5M9 28.3c0 3 6.7 5.5 15 5.5s15-2.5 15-5.5" />
+      </symbol>
+    </svg>
+    <h2 class="strip__title" id="works-with-title">Works with</h2>
+    <ul class="strip__list">
+      <li class="strip__item"><svg class="strip__icon" aria-hidden="true"><use href="#database" /></svg>MySQL</li>
+      <li class="strip__item"><svg class="strip__icon" aria-hidden="true"><use href="#database" /></svg>MariaDB</li>
+      <li class="strip__item"><svg class="strip__icon" aria-hidden="true"><use href="#database" /></svg>PostgreSQL</li>
+      <li class="strip__item"><svg class="strip__icon" aria-hidden="true"><use href="#database" /></svg>SQL Server</li>
+      <li class="strip__item"><svg class="strip__icon" aria-hidden="true"><use href="#database" /></svg>SQLite</li>
+    </ul>
+  </section>
+
+  <section class="strip strip--next" aria-labelledby="runs-on-title">
+    <h2 class="strip__title" id="runs-on-title">Runs on</h2>
+    <ul class="strip__list strip__list--wide">
+      <li class="strip__item">macOS<span class="strip__note">12 or later, Apple Silicon and Intel</span></li>
+      <li class="strip__item">Windows<span class="strip__note">10 and 11, from the Microsoft Store or an installer</span></li>
+      <li class="strip__item">Linux<span class="strip__note">x64, as .deb or AppImage</span></li>
+    </ul>
+  </section>
+  <section class="section" id="features" aria-labelledby="features-title">
+    <h2 class="section__title" id="features-title">What it does</h2>
+    <dl class="features">
+      <div class="feature">
+        <dt>SQL editor</dt>
+        <dd>Completion of schemas, tables and columns, through aliases too. Formatting, find and replace, snippets. Run everything, the selection or the statement under the cursor.</dd>
+      </div>
+      <div class="feature">
+        <dt>Results you can edit</dt>
+        <dd>A fast grid with filter and sort, for hundreds of thousands of rows. Edit cells, add and delete rows: every change is shown as SQL before it is applied.</dd>
+      </div>
+      <div class="feature">
+        <dt>Execution plans</dt>
+        <dd>The plan of a query drawn as a diagram, to see why it is slow.</dd>
+      </div>
+      <div class="feature">
+        <dt>Table and object editors</dt>
+        <dd>Columns, indexes, foreign keys and triggers; views, procedures and functions. The table editor writes the smallest <code>ALTER TABLE</code> that makes the change.</dd>
+      </div>
+      <div class="feature">
+        <dt>Server administration</dt>
+        <dd>Server status with live charts, client sessions, server variables, users, roles and privileges, backup and restore.</dd>
+      </div>
+      <div class="feature">
+        <dt>Import and export</dt>
+        <dd>Results to CSV, JSON, SQL, HTML and Excel. CSV files and spreadsheets (xlsx, xls, ods) into a table.</dd>
+      </div>
+      <div class="feature">
+        <dt>Files as connections</dt>
+        <dd>SQLite databases and CSV files open like a server. A CSV file is edited as a table and saved in its own format.</dd>
+      </div>
+      <div class="feature">
+        <dt>Safe by default</dt>
+        <dd><code>UPDATE</code> and <code>DELETE</code> without <code>WHERE</code> are refused. Production connections are marked on their tab. Unsaved edits and open transactions are confirmed before closing.</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="section" aria-labelledby="engines-title">
+    <h2 class="section__title" id="engines-title">What each database gets</h2>
+    <div class="table-scroll" role="region" aria-labelledby="engines-title" tabindex="0">
+      <table class="engines">
+        <thead>
+          <tr><th scope="col"></th><th scope="col">MySQL, MariaDB</th><th scope="col">PostgreSQL</th><th scope="col">SQL Server 2017+</th><th scope="col">SQLite</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">SQL editor, results, grid editing</th><td>Yes</td><td>Yes</td><td>Yes, with <code>GO</code> batches</td><td>Yes</td></tr>
+          <tr><th scope="row">Visual execution plan</th><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+          <tr><th scope="row">Table, view and routine editors</th><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+          <tr><th scope="row">Server status, sessions, variables</th><td>Yes</td><td>Yes</td><td>Yes</td><td class="engines__none">No</td></tr>
+          <tr><th scope="row">Users and privileges</th><td>Yes</td><td>Roles</td><td>Logins, users, roles</td><td class="engines__none">No</td></tr>
+          <tr><th scope="row">Backup and restore</th><td><code>mysqldump</code></td><td><code>pg_dump</code></td><td><code>.bacpac</code>, <code>.bak</code></td><td class="engines__none">No</td></tr>
+          <tr><th scope="row">Also</th><td>Copy Database</td><td>Sequences, types, extensions</td><td>SQL Server Agent jobs (read-only)</td><td class="engines__none"></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="section__note">Backup and restore use the database's own command-line tools, which have to be installed. Connections can go through SSH tunnels and SSL.</p>
+  </section>
+
+  <section class="section" id="download" aria-labelledby="download-title">
+    <h2 class="section__title" id="download-title">Download</h2>
+    <div class="table-scroll" role="region" aria-labelledby="download-title" tabindex="0">
+      <table class="downloads">
+        <thead>
+          <tr><th scope="col">System</th><th scope="col">Download</th><th scope="col">Updates</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">macOS 12 or later</th>
+            <td><a href="https://github.com/smelzo/dbknife/releases/latest/download/DBKnife-mac-arm64.dmg">Apple Silicon</a>, <a href="https://github.com/smelzo/dbknife/releases/latest/download/DBKnife-mac-x64.dmg">Intel</a></td>
+            <td>Automatic</td>
+          </tr>
+          <tr>
+            <th scope="row">Windows 10 and 11 <span class="beta">beta</span></th>
+            <td><a href="https://apps.microsoft.com/detail/9PHQ3Q8SM96J">Microsoft Store</a>, <a href="https://github.com/smelzo/dbknife/releases/latest/download/DBKnife-win-x64-setup.exe">installer for x64</a></td>
+            <td>Automatic from the Store; with the installer, download the new version</td>
+          </tr>
+          <tr>
+            <th scope="row">Linux x64 <span class="beta">beta</span></th>
+            <td><a href="https://github.com/smelzo/dbknife/releases/latest/download/DBKnife-linux-amd64.deb">.deb</a> for Debian and Ubuntu, <a href="https://github.com/smelzo/dbknife/releases/latest/download/DBKnife-linux-x86_64.AppImage">AppImage</a> for other distributions</td>
+            <td>Download the new version</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="install-notes">
+      <li><strong>macOS:</strong> open the <code>.dmg</code> and drag DBKnife to Applications. The app is signed and notarized by Apple, and updates itself.</li>
+      <li><strong>Windows:</strong> the installer is not signed yet, so SmartScreen shows "Windows protected your PC": choose <em>More info</em>, then <em>Run anyway</em>. The Microsoft Store version has no warning.</li>
+      <li><strong>Linux:</strong> make the AppImage executable before the first start (<em>Properties</em>, <em>Allow executing as program</em>, or <code>chmod +x</code>).</li>
+      <li><strong>Beta:</strong> DBKnife is developed and used every day on macOS. The Windows and Linux versions come from the same code, but have been tried much less.</li>
+    </ul>
+    <p class="section__note">All versions and their changes are on the <a href="https://github.com/smelzo/dbknife/releases">releases page</a>. English and Italian are built in; other languages can be added as language packs.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>DBKnife is free software under the <a href="https://github.com/smelzo/dbknife/blob/main/LICENSE">MIT license</a>. © 2026 Francesco Smelzo.</p>
+  <p><a href="https://github.com/smelzo/dbknife">Source code on GitHub</a></p>
+</footer>
+
+<script>
+  // the download offered first matches the visitor's system; without a match, the button leads to the table
+  const ua = navigator.userAgent
+  const touch = navigator.maxTouchPoints > 1
+  const os = /Mac/.test(ua) && !touch ? 'mac' : /Windows/.test(ua) ? 'windows' : /Linux/.test(ua) && !/Android/.test(ua) ? 'linux' : null
+  if (os) {
+    for (const el of document.querySelectorAll('[data-download]')) el.hidden = el.dataset.download !== os
+  }
+
+  // the demo plays only while on screen, and not at all when the system asks for reduced motion
+  const demo = document.querySelector('[data-demo]')
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    demo.controls = true
+  } else {
+    new IntersectionObserver(([entry]) => (entry.isIntersecting ? demo.play().catch(() => {}) : demo.pause())).observe(demo)
+  }
+</script>
+</body>
+</html>

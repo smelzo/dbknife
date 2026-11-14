@@ -1,0 +1,524 @@
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  --font-mono: Menlo, Monaco, 'SF Mono', monospace;
+  --fs: 12px;
+  --fs-small: 11px;
+
+  --bg-chrome: #e8e8e8;
+  --bg-panel: #f5f5f5;
+  --bg-content: #ffffff;
+  --bg-alt-row: #f7f9fc;
+  --bg-hover: rgba(0, 0, 0, 0.05);
+  --bg-selected: #d5e4fb;
+  --bg-selected-strong: #2f6fd8;
+  --bg-input: #ffffff;
+  --bg-header: #f0f0f0;
+  --border: #d2d2d2;
+  --border-strong: #b9b9b9;
+  --text: #1f1f1f;
+  --text-muted: #6e6e6e;
+  --text-faint: #767676;
+  --text-on-accent: #ffffff;
+  --accent: #0a64d6;
+  --danger: #c62828;
+  --warning: #b26a00;
+  --success: #2e7d32;
+  --modified: #fff3c4;
+  --added: #dcf5dc;
+  --deleted: #fbdada;
+  --null: #757575;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+  --tile: #4a6a8a;
+  --tile-hover: #3b5876;
+  --tile-shadow: rgba(0, 0, 0, 0.22);
+  --tile-sqlite: #ce670c;
+  --tile-sqlite-hover: #a95307;
+  --tile-postgres: #306060;
+  --tile-postgres-hover: #204040;
+  --tile-mssql: #a8262b;
+  --tile-mssql-hover: #861d21;
+  /* connection environment (ConnectionConfig.environment): fill of its label, text on it at least 4.5:1 */
+  --env-production: #c62828;
+  --env-production-text: #ffffff;
+  --env-staging: #b45309;
+  --env-staging-text: #ffffff;
+  --env-test: #7c6f00;
+  --env-test-text: #ffffff;
+  --env-development: #2e7d32;
+  --env-development-text: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg-chrome: #2b2b2b;
+    --bg-panel: #252526;
+    --bg-content: #1e1e1e;
+    --bg-alt-row: #232528;
+    --bg-hover: rgba(255, 255, 255, 0.06);
+    --bg-selected: #264f78;
+    --bg-selected-strong: #2f6fd8;
+    --bg-input: #2d2d2d;
+    --bg-header: #2d2d2d;
+    --border: #3c3c3c;
+    --border-strong: #555555;
+    --text: #dcdcdc;
+    --text-muted: #9a9a9a;
+    --text-faint: #6a6a6a;
+    --accent: #4b9cf5;
+    --text-on-accent: #0b1a2e;
+    --danger: #f06262;
+    --warning: #e0a030;
+    --success: #6cc070;
+    --modified: #4a4320;
+    --added: #1f3d22;
+    --deleted: #4a2323;
+    --null: #7a7a7a;
+    --shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    --tile: #35516e;
+    --tile-hover: #43668a;
+    --tile-shadow: rgba(0, 0, 0, 0.55);
+    --env-production: #e05252;
+    --env-production-text: #111111;
+    --env-staging: #d97706;
+    --env-staging-text: #111111;
+    --env-test: #a39400;
+    --env-test-text: #111111;
+    --env-development: #43a047;
+    --env-development-text: #111111;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg-chrome: #2b2b2b;
+  --bg-panel: #252526;
+  --bg-content: #1e1e1e;
+  --bg-alt-row: #232528;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-selected: #264f78;
+  --bg-selected-strong: #2f6fd8;
+  --bg-input: #2d2d2d;
+  --bg-header: #2d2d2d;
+  --border: #3c3c3c;
+  --border-strong: #555555;
+  --text: #dcdcdc;
+  --text-muted: #9a9a9a;
+  --text-faint: #6a6a6a;
+  --accent: #4b9cf5;
+  --text-on-accent: #0b1a2e;
+  --danger: #f06262;
+  --warning: #e0a030;
+  --success: #6cc070;
+  --modified: #4a4320;
+  --added: #1f3d22;
+  --deleted: #4a2323;
+  --null: #7a7a7a;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --tile: #35516e;
+  --tile-hover: #43668a;
+  --tile-shadow: rgba(0, 0, 0, 0.55);
+  --env-production: #e05252;
+  --env-production-text: #111111;
+  --env-staging: #d97706;
+  --env-staging-text: #111111;
+  --env-test: #a39400;
+  --env-test-text: #111111;
+  --env-development: #43a047;
+  --env-development-text: #111111;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--fs);
+  color: var(--text);
+  background: var(--bg-chrome);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  color: inherit;
+}
+
+input[type='text'],
+input[type='password'],
+input[type='number'],
+input[type='search'],
+select,
+textarea {
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 3px 6px;
+  outline: none;
+  user-select: text;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+textarea {
+  font-family: var(--font-mono);
+  resize: vertical;
+}
+
+button {
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 3px 12px;
+  cursor: default;
+}
+
+button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+button:disabled {
+  opacity: 0.45;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+}
+
+button.danger {
+  color: var(--danger);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Small square icon buttons used in toolbars */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.icon-btn.active {
+  background: var(--bg-selected);
+  border-color: var(--border);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  min-height: 30px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+
+.toolbar .sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 5px;
+}
+
+.toolbar .spacer {
+  flex: 1;
+}
+
+.toolbar select {
+  padding: 1px 4px;
+  height: 22px;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.selectable {
+  user-select: text;
+  cursor: text;
+}
+
+label.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Colours of a connection's environment for its label and the tab's top border (--env fill, --env-text on it) */
+.env-production {
+  --env: var(--env-production);
+  --env-text: var(--env-production-text);
+}
+
+.env-staging {
+  --env: var(--env-staging);
+  --env-text: var(--env-staging-text);
+}
+
+.env-test {
+  --env: var(--env-test);
+  --env-text: var(--env-test-text);
+}
+
+.env-development {
+  --env: var(--env-development);
+  --env-text: var(--env-development-text);
+}
+
+/* Generic table used by admin and inspector pages */
+table.list {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table.list th,
+table.list td {
+  text-align: left;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+table.list th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-header);
+  font-weight: 600;
+  z-index: 1;
+}
+
+table.list tr.selected td {
+  background: var(--bg-selected);
+}
+
+/* Form rows used by dialogs and editors */
+.form-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.form-grid > label {
+  text-align: right;
+  color: var(--text-muted);
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-content);
+}
+
+.page-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 600;
+  background: var(--bg-panel);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.page-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.tabbar {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-chrome);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+
+.tabbar .tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 28px;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+  color: var(--text-muted);
+  max-width: 240px;
+}
+
+.tabbar .tab .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tabbar .tab.active {
+  background: var(--bg-content);
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.tabbar .tab .close {
+  visibility: hidden;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tabbar .tab:hover .close,
+.tabbar .tab.active .close {
+  visibility: visible;
+}
+
+.tabbar .tab .close:hover {
+  background: var(--bg-hover);
+}
+
+.empty-state {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* splitpanes */
+.splitpanes {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.splitpanes--vertical {
+  flex-direction: row;
+}
+
+.splitpanes--horizontal {
+  flex-direction: column;
+}
+
+.splitpanes__pane {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.splitpanes--vertical > .splitpanes__splitter {
+  width: 1px;
+  background: var(--border);
+  position: relative;
+  cursor: col-resize;
+  flex-shrink: 0;
+}
+
+.splitpanes--horizontal > .splitpanes__splitter {
+  height: 1px;
+  background: var(--border);
+  position: relative;
+  cursor: row-resize;
+  flex-shrink: 0;
+}
+
+.splitpanes__splitter::after {
+  content: '';
+  position: absolute;
+  z-index: 5;
+}
+
+.splitpanes--vertical > .splitpanes__splitter::after {
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  right: -3px;
+}
+
+.splitpanes--horizontal > .splitpanes__splitter::after {
+  left: 0;
+  right: 0;
+  top: -3px;
+  bottom: -3px;
+}
+
+.splitpanes--dragging * {
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

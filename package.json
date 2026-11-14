@@ -1,0 +1,61 @@
+{
+  "name": "dbknife",
+  "productName": "DBKnife",
+  "version": "0.1.8",
+  "description": "SQL editor and database administration tool for MySQL/MariaDB, PostgreSQL, SQL Server and SQLite",
+  "homepage": "https://dbknife.com",
+  "desktopName": "dbknife.desktop",
+  "main": "out/main/index.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "dist": "electron-vite build && electron-builder --mac --dir",
+    "dmg": "electron-vite build && electron-builder --mac",
+    "win": "electron-vite build && electron-builder --win --x64 -c.npmRebuild=false",
+    "linux": "electron-vite build && electron-builder --linux --x64 -c.npmRebuild=false"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.11.2",
+    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
+    "ssh2": "^1.17.0",
+    "tedious": "20.3.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "@types/ssh2": "^1.15.6",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^6.0.0",
+    "lucide-vue-next": "^1.0.0",
+    "monaco-editor": "^0.57.0",
+    "pg-protocol": "^1.16.1",
+    "pinia": "^4.1.0",
+    "playwright": "^1.64.1",
+    "splitpanes": "^4.1.2",
+    "sql-formatter": "^15.9.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5",
+    "vue": "^3.5.44",
+    "vue-tsc": "^3.3.13"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "cpu-features"
+    ],
+    "ignoredBuiltDependencies": [
+      "electron-winstaller",
+      "ssh2"
+    ],
+    "patchedDependencies": {
+      "tedious@20.3.8": "patches/tedious@20.3.8.patch"
+    }
+  }
+}

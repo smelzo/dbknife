@@ -1,0 +1,71 @@
+appId: com.dbknife.app
+productName: DBKnife
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - package.json
+mac:
+  category: public.app-category.developer-tools
+  # the zip feeds the auto-updates (Squirrel.Mac installs only from a zip)
+  target: [dmg, zip]
+  # fixed names: the README and the site link releases/latest/download/<name>
+  artifactName: DBKnife-mac-${arch}.${ext}
+  icon: resources/icon.icns
+  # Developer ID certificate (in the keychain twice: matched by name, signed by hash);
+  # notarized when APPLE_KEYCHAIN_PROFILE names a notarytool profile
+  identity: Francesco Smelzo (GSVCZML7YF)
+  hardenedRuntime: true
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  # "Open With" in the Finder; the same extensions as src/shared/file-types.ts
+  fileAssociations:
+    - ext: [db, sqlite, sqlite3, sq3]
+      name: SQLite Database
+      role: Editor
+      rank: Alternate
+    - ext: [csv]
+      name: CSV File
+      role: Editor
+      rank: Alternate
+  extendInfo:
+    # text of the macOS "Local Network" permission prompt (database servers on the LAN)
+    NSLocalNetworkUsageDescription: DBKnife connects to database servers on your local network.
+  # Electron's and Chromium's license notices: on Windows and Linux electron-builder copies them itself
+  extraResources:
+    - from: node_modules/electron/dist/LICENSE
+      to: LICENSE.electron.txt
+    - from: node_modules/electron/dist/LICENSES.chromium.html
+      to: LICENSES.chromium.html
+# installer for Windows outside the Store, not signed
+nsis:
+  artifactName: DBKnife-win-${arch}-setup.${ext}
+# Microsoft Store package (`electron-builder --win appx`, Windows only): identity reserved
+# in Partner Center; no certificate, the Store re-signs the package on submission
+appx:
+  identityName: weext.db-manager
+  publisher: CN=5802E12D-71C5-4BE2-BC79-5754AE83621F
+  publisherDisplayName: weext
+  applicationId: DBManager
+  artifactName: DBKnife-${version}-${arch}.${ext}
+  languages: [en-US, it-IT]
+  # tiles take the Start menu color instead of the default grey
+  backgroundColor: transparent
+# Linux packages, built on the Mac (`pnpm linux`): the .deb installs chrome-sandbox setuid, so
+# it starts where unprivileged user namespaces are restricted (Ubuntu 24.04)
+linux:
+  target: [deb, AppImage]
+  category: Development
+  maintainer: Francesco Smelzo <1524265+smelzo@users.noreply.github.com>
+  artifactName: DBKnife-linux-${arch}.${ext}
+asar: true
+# license notices of the bundled packages next to app.asar
+extraResources:
+  - from: out/renderer/THIRD-PARTY-NOTICES.txt
+    to: THIRD-PARTY-NOTICES.txt
+  # d-spread and d-spread-write (scripts/update-d-spread.sh), separate programs that read and write spreadsheets
+  - from: bin/${platform}-${arch}
+    to: bin
+  - from: bin/d-spread-LICENSE.txt
+    to: d-spread-LICENSE.txt

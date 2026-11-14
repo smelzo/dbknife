@@ -1,0 +1,116 @@
+/* Layout shared by the account pages: UsersPrivileges, PostgresRoles, MssqlLogins. */
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.filter {
+  margin: 0 10px 6px;
+}
+
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-content);
+}
+
+tr.new td {
+  font-style: italic;
+}
+
+.buttons button {
+  flex: 1;
+  padding: 3px 6px;
+  white-space: nowrap;
+}
+
+.details {
+  flex: 1;
+  min-width: 0;
+}
+
+.subtabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.subtabs button {
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 4px 12px;
+  margin-bottom: -1px;
+}
+
+.subtabs button.active {
+  background: var(--bg-content);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.tab-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: max-content minmax(160px, 260px) minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.pane {
+  border: 1px solid var(--border);
+  overflow: auto;
+  min-height: 0;
+}
+
+.schemas {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+legend {
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.error {
+  color: var(--danger);
+  margin: 0;
+  padding: 6px 14px;
+  white-space: pre-wrap;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.details .empty-state {
+  flex: 1;
+  height: auto;
+}

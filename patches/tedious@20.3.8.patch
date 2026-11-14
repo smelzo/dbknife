@@ -1,0 +1,231 @@
+diff --git a/lib/value-parser.js b/lib/value-parser.js
+index 9cfae8cae1cea9602f0e4b81b1ece9b22d228776..77d96c4ff3bc15d06daf521ab0304869db74af1c 100644
+--- a/lib/value-parser.js
++++ b/lib/value-parser.js
+@@ -19,6 +19,33 @@ const MONEY_DIVISOR = 10000;
+ const PLP_NULL = 0xFFFFFFFFFFFFFFFFn;
+ const UNKNOWN_PLP_LEN = 0xFFFFFFFFFFFFFFFEn;
+ const DEFAULT_ENCODING = 'utf8';
++// db-manager patch: decimals, money and dates/times are returned as exact text
++// (YYYY-MM-DD, HH:MM:SS[.fffffff] with the column's scale, +HH:MM offsets)
++// instead of lossy JavaScript Numbers and Dates.
++const TICKS_PER_DAY = 864e9;
++// days from 0001-01-01 to 1900-01-01, the epoch of datetime and smalldatetime
++const DAYS_TO_1900 = 693595;
++const UTC_EPOCH_0001 = Date.UTC(2000, 0, 1) - 730119 * 86400000;
++function pad(n, width) {
++  return String(n).padStart(width, '0');
++}
++function fixedPoint(value, scale) {
++  const negative = value < 0n;
++  const digits = (negative ? -value : value).toString().padStart(scale + 1, '0');
++  const integer = digits.slice(0, digits.length - scale);
++  return (negative ? '-' : '') + integer + (scale ? '.' + digits.slice(digits.length - scale) : '');
++}
++// days since 0001-01-01 (proleptic Gregorian, as SQL Server counts them)
++function formatDate(days) {
++  const d = new Date(UTC_EPOCH_0001 + days * 86400000);
++  return pad(d.getUTCFullYear(), 4) + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2);
++}
++// ticks of 100 nanoseconds since midnight, with `scale` fractional digits
++function formatTime(ticks, scale) {
++  const seconds = Math.floor(ticks / 1e7);
++  const text = pad(Math.floor(seconds / 3600), 2) + ':' + pad(Math.floor(seconds / 60) % 60, 2) + ':' + pad(seconds % 60, 2);
++  return scale ? text + '.' + pad(ticks % 1e7, 7).slice(0, scale) : text;
++}
+ function readTinyInt(buf, offset) {
+   return (0, _helpers.readUInt8)(buf, offset);
+ }
+@@ -48,7 +75,7 @@ function readSmallMoney(buf, offset) {
+     offset,
+     value
+   } = (0, _helpers.readInt32LE)(buf, offset));
+-  return new _helpers.Result(value / MONEY_DIVISOR, offset);
++  return new _helpers.Result(fixedPoint(BigInt(value), 4), offset);
+ }
+ function readMoney(buf, offset) {
+   let high;
+@@ -61,7 +88,7 @@ function readMoney(buf, offset) {
+     offset,
+     value: low
+   } = (0, _helpers.readUInt32LE)(buf, offset));
+-  return new _helpers.Result((low + 0x100000000 * high) / MONEY_DIVISOR, offset);
++  return new _helpers.Result(fixedPoint((BigInt(high) << 32n) + BigInt(low), 4), offset);
+ }
+ function readBit(buf, offset) {
+   let value;
+@@ -458,32 +485,18 @@ function readNumeric(buf, offset, dataLength, _precision, scale) {
+     offset,
+     value: sign
+   } = (0, _helpers.readUInt8)(buf, offset));
+-  sign = sign === 1 ? 1 : -1;
+-  let value;
+-  if (dataLength === 5) {
+-    ({
+-      offset,
+-      value
+-    } = (0, _helpers.readUInt32LE)(buf, offset));
+-  } else if (dataLength === 9) {
+-    ({
+-      offset,
+-      value
+-    } = (0, _helpers.readUNumeric64LE)(buf, offset));
+-  } else if (dataLength === 13) {
+-    ({
+-      offset,
+-      value
+-    } = (0, _helpers.readUNumeric96LE)(buf, offset));
+-  } else if (dataLength === 17) {
+-    ({
+-      offset,
+-      value
+-    } = (0, _helpers.readUNumeric128LE)(buf, offset));
+-  } else {
++  const size = dataLength - 1;
++  if (size !== 4 && size !== 8 && size !== 12 && size !== 16) {
+     throw new Error(`Unsupported numeric dataLength ${dataLength}`);
+   }
+-  return new _helpers.Result(value * sign / Math.pow(10, scale), offset);
++  if (buf.length < offset + size) {
++    throw new _helpers.NotEnoughDataError(offset + size);
++  }
++  let value = 0n;
++  for (let i = size - 1; i >= 0; i--) {
++    value = value << 8n | BigInt(buf[offset + i]);
++  }
++  return new _helpers.Result(fixedPoint(sign === 1 ? value : -value, scale), offset + size);
+ }
+ function readVariant(buf, offset, options, dataLength) {
+   let baseType;
+@@ -716,7 +729,7 @@ exports.PLPReader = PLPReader;
+ const UTC_EPOCH_1900 = Date.UTC(1900, 0, 1);
+ const UTC_EPOCH_2000 = Date.UTC(2000, 0, 1);
+ const MILLISECONDS_PER_DAY = 86400000;
+-function readSmallDateTime(buf, offset, useUTC) {
++function readSmallDateTime(buf, offset, _useUTC) {
+   let days;
+   ({
+     offset,
+@@ -727,15 +740,9 @@ function readSmallDateTime(buf, offset, useUTC) {
+     offset,
+     value: minutes
+   } = (0, _helpers.readUInt16LE)(buf, offset));
+-  let value;
+-  if (useUTC) {
+-    value = new Date(UTC_EPOCH_1900 + days * MILLISECONDS_PER_DAY + minutes * 60000);
+-  } else {
+-    value = new Date(1900, 0, 1 + days, 0, minutes);
+-  }
+-  return new _helpers.Result(value, offset);
++  return new _helpers.Result(formatDate(days + DAYS_TO_1900) + ' ' + formatTime(minutes * 60 * 1e7, 0), offset);
+ }
+-function readDateTime(buf, offset, useUTC) {
++function readDateTime(buf, offset, _useUTC) {
+   let days;
+   ({
+     offset,
+@@ -747,13 +754,7 @@ function readDateTime(buf, offset, useUTC) {
+     value: threeHundredthsOfSecond
+   } = (0, _helpers.readInt32LE)(buf, offset));
+   const milliseconds = Math.round(threeHundredthsOfSecond * THREE_AND_A_THIRD);
+-  let value;
+-  if (useUTC) {
+-    value = new Date(UTC_EPOCH_1900 + days * MILLISECONDS_PER_DAY + milliseconds);
+-  } else {
+-    value = new Date(1900, 0, 1 + days, 0, 0, 0, milliseconds);
+-  }
+-  return new _helpers.Result(value, offset);
++  return new _helpers.Result(formatDate(days + DAYS_TO_1900) + ' ' + formatTime(milliseconds * 1e4, 3), offset);
+ }
+ // Reads a `time` value, returned in units of 100 nanoseconds since midnight.
+ function readTimeValue(buf, offset, dataLength, scale) {
+@@ -795,37 +796,23 @@ function readTimeValue(buf, offset, dataLength, scale) {
+   }
+   return new _helpers.Result(value, offset);
+ }
+-function readTime(buf, offset, dataLength, scale, useUTC) {
++function readTime(buf, offset, dataLength, scale, _useUTC) {
+   let value;
+   ({
+     offset,
+     value
+   } = readTimeValue(buf, offset, dataLength, scale));
+-  let date;
+-  if (useUTC) {
+-    date = new Date(value / 10000);
+-  } else {
+-    date = new Date(1970, 0, 1, 0, 0, 0, value / 10000);
+-  }
+-  Object.defineProperty(date, 'nanosecondsDelta', {
+-    enumerable: false,
+-    value: value % 10000 / 1e7
+-  });
+-  return new _helpers.Result(date, offset);
++  return new _helpers.Result(formatTime(value, scale), offset);
+ }
+-function readDate(buf, offset, useUTC) {
++function readDate(buf, offset, _useUTC) {
+   let days;
+   ({
+     offset,
+     value: days
+   } = (0, _helpers.readUInt24LE)(buf, offset));
+-  if (useUTC) {
+-    return new _helpers.Result(new Date(UTC_EPOCH_2000 + (days - 730119) * MILLISECONDS_PER_DAY), offset);
+-  } else {
+-    return new _helpers.Result(new Date(2000, 0, days - 730118), offset);
+-  }
++  return new _helpers.Result(formatDate(days), offset);
+ }
+-function readDateTime2(buf, offset, dataLength, scale, useUTC) {
++function readDateTime2(buf, offset, dataLength, scale, _useUTC) {
+   let time;
+   ({
+     offset,
+@@ -836,17 +823,7 @@ function readDateTime2(buf, offset, dataLength, scale, useUTC) {
+     offset,
+     value: days
+   } = (0, _helpers.readUInt24LE)(buf, offset));
+-  let date;
+-  if (useUTC) {
+-    date = new Date(UTC_EPOCH_2000 + (days - 730119) * MILLISECONDS_PER_DAY + Math.trunc(time / 10000));
+-  } else {
+-    date = new Date(2000, 0, days - 730118, 0, 0, 0, time / 10000);
+-  }
+-  Object.defineProperty(date, 'nanosecondsDelta', {
+-    enumerable: false,
+-    value: time % 10000 / 1e7
+-  });
+-  return new _helpers.Result(date, offset);
++  return new _helpers.Result(formatDate(days) + ' ' + formatTime(time, scale), offset);
+ }
+ function readDateTimeOffset(buf, offset, dataLength, scale) {
+   let time;
+@@ -859,17 +836,17 @@ function readDateTimeOffset(buf, offset, dataLength, scale) {
+     offset,
+     value: days
+   } = (0, _helpers.readUInt24LE)(buf, offset));
+-
+-  // time offset?
++  let minutes;
+   ({
+-    offset
+-  } = (0, _helpers.readUInt16LE)(buf, offset));
+-  const date = new Date(UTC_EPOCH_2000 + (days - 730119) * MILLISECONDS_PER_DAY + Math.trunc(time / 10000));
+-  Object.defineProperty(date, 'nanosecondsDelta', {
+-    enumerable: false,
+-    value: time % 10000 / 1e7
+-  });
+-  return new _helpers.Result(date, offset);
++    offset,
++    value: minutes
++  } = (0, _helpers.readInt16LE)(buf, offset));
++  // date and time arrive in UTC: shown in the value's own offset
++  let local = time + minutes * 60 * 1e7;
++  const dayShift = Math.floor(local / TICKS_PER_DAY);
++  local -= dayShift * TICKS_PER_DAY;
++  const zone = (minutes < 0 ? '-' : '+') + pad(Math.floor(Math.abs(minutes) / 60), 2) + ':' + pad(Math.abs(minutes) % 60, 2);
++  return new _helpers.Result(formatDate(days + dayShift) + ' ' + formatTime(local, scale) + ' ' + zone, offset);
+ }
+ module.exports.readValue = readValue;
+ module.exports.isPLPStream = isPLPStream;

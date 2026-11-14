@@ -1,0 +1,151 @@
+# Builds DBKnife for macOS, Windows and Linux when a version tag (v1.2.3, the version of
+# package.json) is pushed, and publishes the GitHub release with the packages under fixed names
+# (linked from the README and the site as releases/latest/download/<name>) and the feeds of the
+# macOS auto-updates, one per architecture (src/main/updater.ts).
+#
+# Secrets: CSC_LINK (Developer ID Application certificate, .p12 in base64), CSC_KEY_PASSWORD,
+# APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID (notarization with the Apple Account).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: The tag is the version of package.json
+        run: test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
+      - run: pnpm install --frozen-lockfile
+      # pnpm skips Electron's postinstall: its license files are copied into the app (mac.extraResources)
+      - run: node node_modules/electron/install.js
+      - run: pnpm build
+      - name: Package, sign and notarize
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm exec electron-builder --mac --arm64 --x64 -c.npmRebuild=false --publish never
+      - name: Verify signature and notarization
+        run: |
+          for app in dist/mac-arm64/DBKnife.app dist/mac/DBKnife.app; do
+            codesign --verify --deep --strict "$app"
+            xcrun stapler validate "$app"
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-mac
+          path: |
+            dist/DBKnife-mac-arm64.dmg
+            dist/DBKnife-mac-arm64.zip
+            dist/DBKnife-mac-x64.dmg
+            dist/DBKnife-mac-x64.zip
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: The tag is the version of package.json
+        shell: bash
+        run: test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # the installer is not signed; cpu-features (optional for ssh2) does not build without the C++ tools
+      - run: pnpm exec electron-builder --win nsis --x64 --config.npmRebuild=false --publish never
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: dist/DBKnife-win-x64-setup.exe
+          if-no-files-found: error
+      # Microsoft Store packages, uploaded by hand in Partner Center, which signs them
+      - run: pnpm exec electron-builder --win appx --x64 --arm64 --config.npmRebuild=false --publish never
+      - uses: actions/upload-artifact@v7
+        with:
+          name: store-appx
+          path: dist/*.appx
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: The tag is the version of package.json
+        run: test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm exec electron-builder --linux --x64 -c.npmRebuild=false --publish never
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-linux
+          path: |
+            dist/DBKnife-linux-amd64.deb
+            dist/DBKnife-linux-x86_64.AppImage
+          if-no-files-found: error
+
+  publish:
+    needs: [mac, windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: assets
+          merge-multiple: true
+      - name: Feeds of the macOS auto-updates
+        run: |
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          for arch in arm64 x64; do
+            jq -n --arg v "${TAG#v}" --arg date "$now" --arg url "$base/DBKnife-mac-$arch.zip" \
+              '{currentRelease: $v, releases: [{version: $v, updateTo: {version: $v, name: $v, pub_date: $date, url: $url}}]}' \
+              > "assets/releases-$arch.json"
+          done
+          cat assets/releases-arm64.json
+      - name: Release notes from the tag message
+        run: |
+          ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type + " " + .object.sha')
+          if [ "${ref%% *}" = tag ]; then
+            gh api "repos/$GITHUB_REPOSITORY/git/tags/${ref#* }" --jq .message > notes.md
+          else
+            : > notes.md
+          fi
+      - run: |
+          gh release create "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "DBKnife ${TAG#v}" --notes-file notes.md

@@ -13,10 +13,12 @@
     "build": "electron-vite build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
+    "e2e": "electron-vite build && node e2e/core.mjs && node e2e/commands.mjs && node e2e/stress.mjs && node e2e/i18n.mjs",
     "dist": "electron-vite build && electron-builder --mac --dir",
     "dmg": "electron-vite build && electron-builder --mac",
     "win": "electron-vite build && electron-builder --win --x64 -c.npmRebuild=false",
-    "linux": "electron-vite build && electron-builder --linux --x64 -c.npmRebuild=false"
+    "linux": "electron-vite build && electron-builder --linux --x64 -c.npmRebuild=false",
+    "open": "open 'dist/mac-arm64/DBKnife.app'"
   },
   "dependencies": {
     "fast-xml-parser": "^5.11.2",

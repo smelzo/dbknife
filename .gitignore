@@ -4,5 +4,7 @@ dist/
 e2e/output/
 .DS_Store
 out-*/
-.claude/worktrees/
+# private: notes, plans and scripts of the author, a git repo of their own
+/.claude/
+/CLAUDE.md
 .vscode/

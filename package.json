@@ -1,7 +1,7 @@
 {
   "name": "dbknife",
   "productName": "DBKnife",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "SQL editor and database administration tool for MySQL/MariaDB, PostgreSQL, SQL Server and SQLite",
   "homepage": "https://dbknife.com",
   "desktopName": "dbknife.desktop",
@@ -31,7 +31,7 @@
     "@types/ssh2": "^1.15.6",
     "@vitejs/plugin-vue": "^6.0.10",
     "electron": "^45.0.0",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.18.1",
     "electron-vite": "^6.0.0",
     "lucide-vue-next": "^1.0.0",
     "monaco-editor": "^0.57.0",

@@ -184,7 +184,9 @@ export class Workspace {
   get features(): EngineFeatures {
     const f = engineFeatures(this.config.engine)
     // the hidden database of a CSV file is no database of the user's, nor its SQL a SQLite user's
-    return this.config.csv ? { ...f, newDatabase: false, snippets: false, vacuumDatabase: undefined } : f
+    if (this.config.csv) return { ...f, newDatabase: false, snippets: false, vacuumDatabase: undefined }
+    // a file on another machine: the link to it can drop, and New Database creates local files only
+    return this.config.channel ? { ...f, newDatabase: false, reconnect: true } : f
   }
 
   /** Closing loses work: CSV changes not saved, or a transaction whose changes saving would not include. */

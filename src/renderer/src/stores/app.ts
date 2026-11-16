@@ -1,6 +1,17 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
-import { defaultSettings, type ConnectionConfig, type ConnectionEnvironment, type Credentials, type OpenSessionResult, type RecentFile, type Settings } from '@shared/types'
+import {
+  defaultSettings,
+  type Channel,
+  type ChannelResult,
+  type ConnectionConfig,
+  type ConnectionEnvironment,
+  type Credentials,
+  type DbError,
+  type OpenSessionResult,
+  type RecentFile,
+  type Settings
+} from '@shared/types'
 import { applyTheme } from '@/editor/monaco'
 import { alertError, confirm, prompt } from '@/dialogs'
 import { t } from '@/i18n'
@@ -28,8 +39,15 @@ export function newConnectionConfig(): ConnectionConfig {
   }
 }
 
+/** The saved channel a connection reaches its file through; undefined without one, or when it is no longer there. */
+export const channelOf = (c: ConnectionConfig): Channel | undefined => (c.channel ? useApp().channels.find((ch) => ch.id === c.channel) : undefined)
+
 export function connectionEndpoint(c: ConnectionConfig): string {
-  if (c.engine === 'sqlite') return c.file
+  if (c.engine === 'sqlite') {
+    if (!c.channel) return c.file
+    const channel = channelOf(c)
+    return channel ? t('app.endpointViaChannel', { file: c.file, channel: channel.name }) : t('app.endpointChannelMissing', { file: c.file })
+  }
   const db = (c.engine === 'postgres' || c.engine === 'mssql') && c.database ? `/${c.database}` : ''
   if (c.method === 'socket') return c.socket + db
   return c.method === 'ssh'
@@ -68,28 +86,30 @@ const secretPrompts = {
   }
 } as const
 
+type SecretNeed = keyof typeof secretPrompts
+
+/** What the prompt for a secret names: the service it opens and the user it belongs to. */
+type SecretOwner = { service: string; user: string }
+
+const sshOwner = (ssh: { user: string; host: string }): SecretOwner => ({ service: `${ssh.user}@${ssh.host}`, user: ssh.user })
+
 /**
- * Asks for the missing secrets until the session opens or the user gives up.
- * `attempt` performs the actual open/test call with the collected credentials.
+ * Asks for the missing secrets until the attempt succeeds or the user gives up (undefined).
+ * `attempt` performs the actual call with the collected credentials.
  */
-export async function withCredentials(
-  config: ConnectionConfig,
-  attempt: (creds: Credentials) => Promise<OpenSessionResult>
-): Promise<OpenSessionResult | undefined> {
+async function askSecrets<R extends { ok: boolean; needs?: SecretNeed; error?: DbError }>(
+  owner: (needs: SecretNeed) => SecretOwner,
+  attempt: (creds: Credentials) => Promise<R>
+): Promise<R | undefined> {
   const creds: Credentials = {}
   let previousError = ''
   for (;;) {
     const r = await attempt(creds)
     if (r.ok || !r.needs) return r
     const p = secretPrompts[r.needs]
-    // MySQL service names follow MySQL Workbench's keychain entries
-    const service =
-      r.needs === 'password'
-        ? `${config.engine === 'mysql' ? 'Mysql' : engineLabels[config.engine]}@${config.method === 'ssh' ? `${config.host}:${config.port}@${config.ssh.host}` : connectionEndpoint(config)}`
-        : `${config.ssh.user}@${config.ssh.host}`
     const error = r.error?.message && r.error.message !== previousError ? r.error.message : ''
     previousError = r.error?.message ?? ''
-    const message = t(p.message, { service, user: r.needs === 'password' ? config.user : config.ssh.user })
+    const message = t(p.message, owner(r.needs))
     const values = await prompt({
       title: t(p.title),
       message: error ? `${error}\n\n${message}` : message,
@@ -104,9 +124,36 @@ export async function withCredentials(
   }
 }
 
+/**
+ * Opens or tests a connection, asking for the secrets it lacks. The SSH ones of a connection
+ * with a channel are the channel's, so the prompt names the channel's user and host.
+ */
+export function withCredentials(
+  config: ConnectionConfig,
+  attempt: (creds: Credentials) => Promise<OpenSessionResult>
+): Promise<OpenSessionResult | undefined> {
+  const ssh = channelOf(config) ?? config.ssh
+  return askSecrets(
+    (needs) =>
+      needs === 'password'
+        ? {
+            // MySQL service names follow MySQL Workbench's keychain entries
+            service: `${config.engine === 'mysql' ? 'Mysql' : engineLabels[config.engine]}@${config.method === 'ssh' ? `${config.host}:${config.port}@${config.ssh.host}` : connectionEndpoint(config)}`,
+            user: config.user
+          }
+        : sshOwner(ssh),
+    attempt
+  )
+}
+
+/** Verifies or browses a channel, asking for the SSH password or key passphrase it lacks. */
+export const withChannelCredentials = (channel: Channel, attempt: (creds: Credentials) => Promise<ChannelResult>): Promise<ChannelResult | undefined> =>
+  askSecrets(() => sshOwner(channel), attempt)
+
 export const useApp = defineStore('app', () => {
   const settings = reactive<Settings>({ ...defaultSettings })
   const connections = ref<ConnectionConfig[]>([])
+  const channels = ref<Channel[]>([])
   const recentFiles = ref<RecentFile[]>([])
   // shallow: Workspace instances are reactive themselves and must keep their class type
   const workspaces = shallowRef<Workspace[]>([])
@@ -119,7 +166,7 @@ export const useApp = defineStore('app', () => {
   async function init(): Promise<void> {
     Object.assign(settings, await window.api.settings.get())
     applyTheme(settings.theme)
-    await loadConnections()
+    await Promise.all([loadConnections(), loadChannels()])
     updateReady.value = await window.api.app.updateReady()
     window.api.app.onUpdateReady((v) => (updateReady.value = v))
     watch(
@@ -146,6 +193,11 @@ export const useApp = defineStore('app', () => {
   /** The saved connections and the recent files, which leave out the files of saved connections. */
   async function loadConnections(): Promise<void> {
     ;[connections.value, recentFiles.value] = await Promise.all([window.api.connections.list(), window.api.recentFiles.list()])
+  }
+
+  /** The saved channels; reloaded after each one saved or removed. */
+  async function loadChannels(): Promise<void> {
+    channels.value = await window.api.channels.list()
   }
 
   async function updateSettings(patch: Partial<Settings>): Promise<void> {
@@ -251,6 +303,7 @@ export const useApp = defineStore('app', () => {
   return {
     settings,
     connections,
+    channels,
     recentFiles,
     workspaces,
     active,
@@ -259,6 +312,7 @@ export const useApp = defineStore('app', () => {
     activeWorkspace,
     init,
     loadConnections,
+    loadChannels,
     updateSettings,
     connect,
     openFile,

@@ -4,6 +4,7 @@ import { CsvSession } from './drivers/csv'
 import { MssqlSession } from './drivers/mssql'
 import { MysqlSession } from './drivers/mysql'
 import { SqliteSession } from './drivers/sqlite'
+import { RemoteSqliteSession } from './drivers/sqlite-remote'
 import { PostgresSession } from './drivers/postgres'
 import { ServerSession } from './server-session'
 import type { DbSession, SessionSecrets } from './session'
@@ -13,7 +14,8 @@ export function createSession(config: ConnectionConfig, secrets: SessionSecrets,
     case 'mysql':
       return new MysqlSession(config, secrets, safeUpdates)
     case 'sqlite':
-      return config.csv ? new CsvSession(config, safeUpdates) : new SqliteSession(config, safeUpdates)
+      if (config.csv) return new CsvSession(config, safeUpdates)
+      return config.channel ? new RemoteSqliteSession(config, secrets, safeUpdates) : new SqliteSession(config, safeUpdates)
     case 'postgres':
       return new PostgresSession(config, secrets, safeUpdates)
     case 'mssql':

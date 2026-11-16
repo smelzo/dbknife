@@ -106,6 +106,11 @@ pnpm build && pnpm exec electron-builder -c.mac.identity=null   # unsigned packa
 `bin/` holds prebuilt executables of d-spread, the helper that reads and writes
 spreadsheets, with its license in `bin/d-spread-LICENSE.txt`.
 
+`bin/remote/` holds prebuilt executables of dbknife-sqlite, the small program the app copies to
+`~/.cache/dbknife` on the machine of a remote SQLite database and runs there over SSH. Its source
+is in `helper/` (`sh helper/build.sh` rebuilds the executables), its notices in
+`bin/remote/NOTICE.txt`.
+
 ## License
 
 [MIT](LICENSE) © 2026 Francesco Smelzo. The licenses of the bundled third-party software are in

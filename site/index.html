@@ -202,6 +202,54 @@
     </ul>
   </section>
 
+  <section class="section" id="up-close" aria-labelledby="up-close-title">
+    <h2 class="section__title" id="up-close-title">Up close</h2>
+    <div class="showcase">
+      <div class="showcase__text">
+        <h3 class="showcase__title">Edit results in the grid</h3>
+        <p>Change cells, add and delete rows right in the results. Before anything reaches the server, DBKnife shows the <code>UPDATE</code>, <code>INSERT</code> and <code>DELETE</code> it will run, and applies them together.</p>
+      </div>
+      <figure class="window showcase__media">
+        <video class="window__video" data-demo muted loop playsinline preload="none" width="1280" height="800" poster="media/grid-edit.jpg"
+          aria-label="In the result grid the price of two tracks is changed and a row is added; before applying, a dialog shows the UPDATE and INSERT statements generated.">
+          <source src="media/grid-edit.webm" type="video/webm">
+          <source src="media/grid-edit.mp4" type="video/mp4">
+        </video>
+      </figure>
+    </div>
+    <div class="showcase">
+      <div class="showcase__text">
+        <h3 class="showcase__title">See why a query is slow</h3>
+        <p>Explain draws the execution plan as a diagram: the tables read, how they are joined and the rows each step expects, on every database.</p>
+      </div>
+      <figure class="window showcase__media">
+        <img class="window__image" src="media/plan.jpg" width="1280" height="744" loading="lazy" alt="The visual execution plan of a join between invoices, invoice lines, tracks and genres, with the query in the editor above.">
+      </figure>
+    </div>
+    <div class="showcase">
+      <div class="showcase__text">
+        <h3 class="showcase__title">Change tables safely</h3>
+        <p>Columns, indexes, foreign keys and triggers in one editor. Apply shows the smallest <code>ALTER TABLE</code> that makes the change, to read before it runs.</p>
+      </div>
+      <figure class="window showcase__media">
+        <img class="window__image" src="media/table-editor.jpg" width="1280" height="634" loading="lazy" alt="The table editor on the Album table with a new ReleaseYear column and its index: the review dialog shows a single ALTER TABLE statement.">
+      </figure>
+    </div>
+    <div class="showcase">
+      <div class="showcase__text">
+        <h3 class="showcase__title">Watch the server</h3>
+        <p>Live charts of connections, network traffic, queries per second and buffer pool. Client sessions, variables and users are one click away.</p>
+      </div>
+      <figure class="window showcase__media">
+        <video class="window__video" data-demo muted loop playsinline preload="none" width="1280" height="800" poster="media/status.jpg"
+          aria-label="The MySQL server status page, with live charts of connections, network traffic, queries per second and disk writes.">
+          <source src="media/status.webm" type="video/webm">
+          <source src="media/status.mp4" type="video/mp4">
+        </video>
+      </figure>
+    </div>
+  </section>
+
   <section class="section" aria-labelledby="engines-title">
     <h2 class="section__title" id="engines-title">What each database gets</h2>
     <div class="table-scroll" role="region" aria-labelledby="engines-title" tabindex="0">
@@ -273,12 +321,15 @@
     for (const el of document.querySelectorAll('[data-download]')) el.hidden = el.dataset.download !== os
   }
 
-  // the demo plays only while on screen, and not at all when the system asks for reduced motion
-  const demo = document.querySelector('[data-demo]')
+  // the demos play only while on screen, and not at all when the system asks for reduced motion
+  const demos = document.querySelectorAll('[data-demo]')
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    demo.controls = true
+    for (const demo of demos) demo.controls = true
   } else {
-    new IntersectionObserver(([entry]) => (entry.isIntersecting ? demo.play().catch(() => {}) : demo.pause())).observe(demo)
+    const observer = new IntersectionObserver((entries) => {
+      for (const { target, isIntersecting } of entries) isIntersecting ? target.play().catch(() => {}) : target.pause()
+    })
+    for (const demo of demos) observer.observe(demo)
   }
 </script>
 </body>

@@ -224,7 +224,8 @@ code {
     0 1.5rem 4rem -1rem rgb(5 20 45 / 0.55);
 }
 
-.window__video {
+.window__video,
+.window__image {
   display: block;
   width: 100%;
   height: auto;
@@ -469,6 +470,50 @@ main {
   fill: none;
   stroke: var(--color-art-on-warm);
   stroke-width: 3.5;
+}
+
+/* --- up close: text and a picture side by side, on alternate sides ------- */
+
+.showcase {
+  display: grid;
+  gap: var(--space-md);
+  align-items: center;
+}
+
+.showcase + .showcase {
+  margin-top: var(--space-xl);
+}
+
+.showcase__title {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.showcase__text p {
+  max-width: 30rem;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* a smaller window than the hero's: a lighter shadow */
+.showcase__media {
+  margin: 0;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.35),
+    0 1rem 2.5rem -1rem rgb(5 20 45 / 0.45);
+}
+
+@media (min-width: 56rem) {
+  .showcase {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: var(--space-xl);
+  }
+
+  .showcase:nth-of-type(even) .showcase__text {
+    order: 1;
+  }
 }
 
 /* --- tables --------------------------------------------------------------- */

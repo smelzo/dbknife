@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, appendF
 import { join } from 'node:path'
 import {
   defaultSettings,
+  type Channel,
   type ConnectionConfig,
   type HistoryEntry,
   type SecretKind,
@@ -70,6 +71,28 @@ export function removeConnection(id: string): void {
 }
 
 export const getConnection = (id: string): ConnectionConfig | undefined => listConnections().find((c) => c.id === id)
+
+// --- channels (their SSH secrets are stored under the channel's id) ---------
+
+export const listChannels = (): Channel[] => readJson<Channel[]>(file('channels.json'), [])
+
+export function saveChannel(channel: Channel): void {
+  const all = listChannels()
+  const i = all.findIndex((c) => c.id === channel.id)
+  if (i >= 0) all[i] = channel
+  else all.push(channel)
+  writeJson(file('channels.json'), all)
+}
+
+export function removeChannel(id: string): void {
+  writeJson(
+    file('channels.json'),
+    listChannels().filter((c) => c.id !== id)
+  )
+  clearSecrets(id)
+}
+
+export const getChannel = (id: string): Channel | undefined => listChannels().find((c) => c.id === id)
 
 // --- secrets (encrypted with the OS keychain-backed safeStorage key) -------
 

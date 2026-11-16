@@ -4,11 +4,22 @@ import { readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { FileFilter, MenuState, MessageOptions } from '@shared/api'
 import { t } from '@shared/i18n'
-import type { ConnectionConfig, Credentials, ExecOptions, MenuItemSpec, OpenSessionResult, RecentFile, SecretKind } from '@shared/types'
+import type {
+  Channel,
+  ChannelResult,
+  ConnectionConfig,
+  Credentials,
+  ExecOptions,
+  MenuItemSpec,
+  OpenSessionResult,
+  RecentFile,
+  SecretKind
+} from '@shared/types'
+import { browseClose, browseList, browseOpen, closeAllBrowsing, verifyChannel } from './channels'
 import { allowClose } from './close-guard'
 import { createSession } from './db/create-session'
 import { CsvSession } from './db/drivers/csv'
-import { expandHome, isAuthError, toDbError, usesPassword, type DbSession } from './db/session'
+import { expandHome, isAuthError, toDbError, usesPassword, type DbSession, type SessionSecrets } from './db/session'
 import { SshError } from './db/ssh'
 import { i18nInfo, installLanguage, languagesDir, listInstalled, loadLanguage, removeLanguage } from './i18n'
 import { buildMenu, setMenuState } from './menu'
@@ -37,6 +48,42 @@ const getCsvSession = (id: string): CsvSession => {
 export function closeAllSessions(): void {
   for (const s of sessions.values()) s.close()
   sessions.clear()
+  closeAllBrowsing()
+}
+
+/** SSH password and passphrase: the supplied ones, else those saved under `id` (a connection's, or a channel's). */
+const sshSecrets = (id: string, creds: Credentials): SessionSecrets => ({
+  sshPassword: creds.sshPassword ?? store.getSecret(id, 'ssh'),
+  sshPassphrase: creds.sshPassphrase ?? store.getSecret(id, 'sshPassphrase')
+})
+
+function saveSshSecrets(id: string, creds: Credentials): void {
+  if (creds.sshPassword !== undefined) store.setSecret(id, 'ssh', creds.sshPassword)
+  if (creds.sshPassphrase !== undefined) store.setSecret(id, 'sshPassphrase', creds.sshPassphrase)
+}
+
+/** The secret the SSH server asks for or has rejected, for the renderer to prompt for it. */
+const sshNeeds = (err: SshError): 'sshPassword' | 'sshPassphrase' | undefined =>
+  err.kind === 'auth' ? 'sshPassword' : err.kind === 'passphrase' ? 'sshPassphrase' : undefined
+
+/**
+ * Runs `action` on a channel with the supplied SSH secrets, falling back to the
+ * stored ones; only when it succeeds the supplied secrets are stored (with `creds.save`).
+ */
+async function useChannel(
+  channel: Channel,
+  creds: Credentials,
+  action: (secrets: SessionSecrets) => Promise<Pick<ChannelResult, 'browseId'>>
+): Promise<ChannelResult> {
+  let done: Pick<ChannelResult, 'browseId'>
+  try {
+    done = await action(sshSecrets(channel.id, creds))
+  } catch (err) {
+    if (err instanceof SshError) return { ok: false, error: { message: err.message }, needs: sshNeeds(err) }
+    return { ok: false, error: toDbError(err) }
+  }
+  if (creds.save) saveSshSecrets(channel.id, creds)
+  return { ok: true, ...done }
 }
 
 /**
@@ -71,27 +118,21 @@ async function openSession(config: ConnectionConfig, creds: Credentials): Promis
     if (password !== undefined) store.setSecret(id, 'password', password)
   }
   if (password === undefined && usesPassword(config.engine)) return { result: { ok: false, needs: 'password' } }
-  const secrets = {
-    password,
-    sshPassword: creds.sshPassword ?? store.getSecret(id, 'ssh'),
-    sshPassphrase: creds.sshPassphrase ?? store.getSecret(id, 'sshPassphrase')
-  }
+  // a channel is shared by connections: its SSH secrets are those of the channel
+  const sshId = config.channel || id
+  const secrets = { password, ...sshSecrets(sshId, creds) }
   let session: DbSession | undefined
   try {
     session = createSession(config, secrets, store.getSettings().safeUpdates)
     await session.open()
   } catch (err) {
-    if (err instanceof SshError) {
-      const needs = err.kind === 'auth' ? 'sshPassword' : err.kind === 'passphrase' ? 'sshPassphrase' : undefined
-      return { result: { ok: false, error: { message: err.message }, needs } }
-    }
+    if (err instanceof SshError) return { result: { ok: false, error: { message: err.message }, needs: sshNeeds(err) } }
     const error = toDbError(err)
     return { result: { ok: false, error, needs: isAuthError(config.engine, error) ? 'password' : undefined } }
   }
   if (creds.save) {
     if (creds.password !== undefined) store.setSecret(id, 'password', creds.password)
-    if (creds.sshPassword !== undefined) store.setSecret(id, 'ssh', creds.sshPassword)
-    if (creds.sshPassphrase !== undefined) store.setSecret(id, 'sshPassphrase', creds.sshPassphrase)
+    saveSshSecrets(sshId, creds)
   }
   return { result: { ok: true, sessionId: session.id, info: session.info }, session }
 }
@@ -120,6 +161,31 @@ export function registerIpc(): void {
   ipcMain.handle('connections:remove', (_e, id: string) => store.removeConnection(id))
   ipcMain.handle('connections:reorder', (_e, ids: string[]) => store.reorderConnections(ids))
   ipcMain.handle('connections:importWorkbench', () => importWorkbenchConnections())
+
+  // channels: saved only once verified
+  ipcMain.handle('channels:list', () => store.listChannels())
+  ipcMain.handle('channels:save', (_e, channel: Channel, creds: Credentials) =>
+    useChannel(channel, creds, async (secrets) => {
+      await verifyChannel(channel, secrets)
+      store.saveChannel(channel)
+      return {}
+    })
+  )
+  ipcMain.handle('channels:remove', (_e, id: string): string[] => {
+    const users = store
+      .listConnections()
+      .filter((c) => c.channel === id)
+      .map((c) => c.name)
+    if (!users.length) store.removeChannel(id)
+    return users
+  })
+  ipcMain.handle('channels:browseOpen', async (_e, channelId: string, creds: Credentials): Promise<ChannelResult> => {
+    const channel = store.getChannel(channelId)
+    if (!channel) return { ok: false, error: { message: t('main.channel.notFound') } }
+    return useChannel(channel, creds, async (secrets) => ({ browseId: await browseOpen(channel, secrets) }))
+  })
+  ipcMain.handle('channels:browseList', (_e, browseId: string, path: string) => browseList(browseId, path))
+  ipcMain.handle('channels:browseClose', (_e, browseId: string) => browseClose(browseId))
 
   // secrets
   ipcMain.handle('secrets:status', (_e, id: string) => store.secretStatus(id))
@@ -235,7 +301,8 @@ export function registerIpc(): void {
     const saved = new Set(
       store
         .listConnections()
-        .filter((c) => c.engine === 'sqlite' && c.file)
+        // the file of a connection with a channel is on another machine
+        .filter((c) => c.engine === 'sqlite' && c.file && !c.channel)
         .map((c) => resolve(expandHome(c.file)))
     )
     return store

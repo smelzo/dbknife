@@ -1,5 +1,7 @@
 import type {
   AutocommitResult,
+  Channel,
+  ChannelResult,
   ConnectionConfig,
   CopyOptions,
   CopyPreview,
@@ -22,6 +24,7 @@ import type {
   OpenSessionResult,
   QueryResult,
   RecentFile,
+  RemoteListing,
   SecretKind,
   Settings,
   Snippet,
@@ -64,6 +67,22 @@ export interface Api {
     /** Persists the tile order of the home screen. */
     reorder(ids: string[]): Promise<void>
     importWorkbench(): Promise<ImportedConnections>
+  }
+  /** Verified links to other machines, through which SQLite connections open a file there. */
+  channels: {
+    list(): Promise<Channel[]>
+    /**
+     * Verifies the channel (connection, helper, listing of the home folder) and only then saves it,
+     * with the supplied secrets when `credentials.save`.
+     */
+    save(channel: Channel, credentials: Credentials): Promise<ChannelResult>
+    /** Removes the channel and its secrets, unless connections use it: then nothing is removed and their names come back. */
+    remove(id: string): Promise<string[]>
+    /** Opens a session browsing the folders of the channel's machine; its handle is `browseId` of the result. */
+    browseOpen(channelId: string, credentials: Credentials): Promise<ChannelResult>
+    /** The entries of a folder; an empty path is the home folder. */
+    browseList(browseId: string, path: string): Promise<RemoteListing>
+    browseClose(browseId: string): Promise<void>
   }
   secrets: {
     status(id: string): Promise<Record<SecretKind, boolean>>

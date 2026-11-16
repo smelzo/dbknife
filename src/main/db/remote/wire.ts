@@ -7,7 +7,7 @@ import { statementKind } from '@shared/sql/analyze'
 import { sqliteRules } from '@shared/sql/lexer'
 import { opensTransaction } from '@shared/sql/transaction'
 import type { Cell, DbError, ExecResult, QueryResult, Row } from '@shared/types'
-import { toCell, toColumnInfo, type SqliteColumn } from '../drivers/sqlite-columns'
+import { dmlKinds, toCell, toColumnInfo, type SqliteColumn } from '../drivers/sqlite-columns'
 // types only: the module is the entry of a utility process
 import type { SqliteRequest, SqliteResponse } from '../drivers/sqlite-process'
 
@@ -96,9 +96,6 @@ export function toWire(req: SqliteRequest): WireCommand {
       return req
   }
 }
-
-// the same statements as in sqlite-process.ts
-const dmlKinds = new Set(['INSERT', 'REPLACE', 'UPDATE', 'DELETE', 'WITH'])
 
 function execResult(sql: string, reply: ExecuteReply, elapsedMs: number): ExecResult {
   // what the answer took beyond the statement itself: reading the rows and the way back

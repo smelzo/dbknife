@@ -123,8 +123,12 @@ export class HelperLink {
     let res: WireResponse
     if (size > constants.MAX_STRING_LENGTH) res = failure(t('main.channel.resultTooLarge'))
     else {
+      const line = Buffer.concat(chunks, size).toString()
       try {
-        res = JSON.parse(Buffer.concat(chunks, size).toString())
+        const parsed: unknown = JSON.parse(line)
+        // valid JSON, yet not a response: a number or a text printed by something else
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error(line.slice(0, 200))
+        res = parsed as WireResponse
       } catch (err) {
         res = failure(t('main.channel.badResponse', { error: (err as Error).message }))
       }
@@ -181,9 +185,13 @@ interface HelperBinary {
 const binaries = new WeakMap<Client, Promise<HelperBinary>>()
 
 async function findBinary(client: Client): Promise<HelperBinary> {
-  const { stdout, stderr } = await run(client, 'uname -sm')
-  const platform = platforms.get(stdout.trim())
-  if (!platform) throw new Error(t('main.channel.unsupportedPlatform', { platform: stdout.trim() || stderr.trim() }))
+  const exit = await run(client, 'uname -sm')
+  const platform = platforms.get(exit.stdout.trim())
+  if (!platform) {
+    const answer = exit.stdout.trim() || exit.stderr.trim()
+    // no answer at all: the command did not run (connection lost, an account that runs no commands)
+    throw new Error(answer ? t('main.channel.unsupportedPlatform', { platform: answer }) : failed('main.channel.startFailed', 'uname', exit))
+  }
   // packaged: Resources/bin/remote (electron-builder.yml); otherwise bin/remote of the repo, as in spread.ts
   const dir = app.isPackaged ? join(process.resourcesPath, 'bin') : join(__dirname, '../../bin')
   const content = await readFile(join(dir, 'remote', `dbknife-sqlite-${platform}`))
@@ -234,7 +242,10 @@ function launch(client: Client, name: string): Promise<HelperLink> {
         if (probe.id === 1) return resolve(link)
         link.kill()
         reject(new StartError(t('main.channel.startFailed', { error: probe.error?.message ?? '' }), false))
-      }, reject)
+      }, (err) => {
+        link.kill()
+        reject(err)
+      })
     })
   })
 }
@@ -245,11 +256,14 @@ function launch(client: Client, name: string): Promise<HelperLink> {
  * Complete means of the size sent: when the connection drops `cat` sees the end of
  * stdin and succeeds, and a cut file under the final name would never be replaced.
  * `wc` pads its count on macOS, hence the unquoted, numeric comparison.
+ * The temporary file carries the id of its shell: two connections uploading at the
+ * same time each write their own, and neither removes the other's; a failed upload
+ * removes its own, which nothing else would.
  * `name` holds only [a-z0-9-] and the size is a number of this side: nothing the
  * user typed is part of the command.
  */
 async function install(client: Client, { name, content }: HelperBinary): Promise<void> {
-  const command = `sh -c 'umask 077; d=${remoteDir}; mkdir -p $d && cat > $d/${name}.tmp && [ $(wc -c < $d/${name}.tmp) -eq ${content.length} ] && chmod 700 $d/${name}.tmp && mv $d/${name}.tmp $d/${name} && find $d -name "dbknife-sqlite-*" ! -name "${name}" -delete'`
+  const command = `sh -c 'umask 077; d=${remoteDir}; t=$d/${name}.$$.tmp; mkdir -p $d && cat > $t && [ $(wc -c < $t) -eq ${content.length} ] && chmod 700 $t && mv $t $d/${name} && find $d -name "dbknife-sqlite-*" ! -name "${name}" ! -name "${name}.*" -delete; s=$?; rm -f $t; exit $s'`
   const exit = await run(client, command, content)
   if (exit.code !== 0) throw new Error(failed('main.channel.installFailed', 'sh', exit))
 }

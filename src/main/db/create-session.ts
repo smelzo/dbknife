@@ -7,7 +7,7 @@ import { SqliteSession } from './drivers/sqlite'
 import { RemoteSqliteSession } from './drivers/sqlite-remote'
 import { PostgresSession } from './drivers/postgres'
 import { ServerSession } from './server-session'
-import type { DbSession, SessionSecrets } from './session'
+import { channelId, type DbSession, type SessionSecrets } from './session'
 
 export function createSession(config: ConnectionConfig, secrets: SessionSecrets, safeUpdates: boolean): DbSession {
   switch (config.engine) {
@@ -15,7 +15,7 @@ export function createSession(config: ConnectionConfig, secrets: SessionSecrets,
       return new MysqlSession(config, secrets, safeUpdates)
     case 'sqlite':
       if (config.csv) return new CsvSession(config, safeUpdates)
-      return config.channel ? new RemoteSqliteSession(config, secrets, safeUpdates) : new SqliteSession(config, safeUpdates)
+      return channelId(config) ? new RemoteSqliteSession(config, secrets, safeUpdates) : new SqliteSession(config, safeUpdates)
     case 'postgres':
       return new PostgresSession(config, secrets, safeUpdates)
     case 'mssql':

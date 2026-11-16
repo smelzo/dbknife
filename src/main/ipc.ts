@@ -19,7 +19,7 @@ import { browseClose, browseList, browseOpen, closeAllBrowsing, verifyChannel } 
 import { allowClose } from './close-guard'
 import { createSession } from './db/create-session'
 import { CsvSession } from './db/drivers/csv'
-import { expandHome, isAuthError, toDbError, usesPassword, type DbSession, type SessionSecrets } from './db/session'
+import { channelId, expandHome, isAuthError, toDbError, usesPassword, type DbSession, type SessionSecrets } from './db/session'
 import { SshError } from './db/ssh'
 import { i18nInfo, installLanguage, languagesDir, listInstalled, loadLanguage, removeLanguage } from './i18n'
 import { buildMenu, setMenuState } from './menu'
@@ -119,7 +119,7 @@ async function openSession(config: ConnectionConfig, creds: Credentials): Promis
   }
   if (password === undefined && usesPassword(config.engine)) return { result: { ok: false, needs: 'password' } }
   // a channel is shared by connections: its SSH secrets are those of the channel
-  const sshId = config.channel || id
+  const sshId = channelId(config) ?? id
   const secrets = { password, ...sshSecrets(sshId, creds) }
   let session: DbSession | undefined
   try {
@@ -174,7 +174,7 @@ export function registerIpc(): void {
   ipcMain.handle('channels:remove', (_e, id: string): string[] => {
     const users = store
       .listConnections()
-      .filter((c) => c.channel === id)
+      .filter((c) => channelId(c) === id)
       .map((c) => c.name)
     if (!users.length) store.removeChannel(id)
     return users
@@ -302,7 +302,7 @@ export function registerIpc(): void {
       store
         .listConnections()
         // the file of a connection with a channel is on another machine
-        .filter((c) => c.engine === 'sqlite' && c.file && !c.channel)
+        .filter((c) => c.engine === 'sqlite' && c.file && !channelId(c))
         .map((c) => resolve(expandHome(c.file)))
     )
     return store

@@ -9,7 +9,7 @@ import type { Cell, DbError, ExecResult, QueryResult, Row } from '@shared/types'
 import { statementKind } from '@shared/sql/analyze'
 import { sqliteRules } from '@shared/sql/lexer'
 import { opensTransaction } from '@shared/sql/transaction'
-import { toCell, toColumnInfo, type SqliteColumn } from './sqlite-columns'
+import { dmlKinds, toCell, toColumnInfo, type SqliteColumn } from './sqlite-columns'
 
 export type SqliteRequest =
   | { op: 'open'; file: string; busyTimeoutMs: number }
@@ -87,8 +87,6 @@ function exportCsv(file: string, table: string, format: CsvFormat): void {
     throw err
   }
 }
-
-const dmlKinds = new Set(['INSERT', 'REPLACE', 'UPDATE', 'DELETE', 'WITH'])
 
 function execute(sql: string, autocommit: boolean): ExecResult {
   const t0 = performance.now()

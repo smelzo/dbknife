@@ -4,39 +4,17 @@
 //   docker run -d --name dbm-demo-mysql -e MYSQL_ROOT_PASSWORD=test -p 127.0.0.1:33070:3306 mysql:8.4
 //   docker exec -i dbm-demo-mysql mysql -uroot -ptest < Chinook_MySql.sql
 //   pnpm build && node e2e/demo-editor.mjs && e2e/demo-video.sh e2e/output/demo-editor
-import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { launch, outDir, profileWith, shot } from './lib.mjs'
+import { outDir, shot } from './lib.mjs'
 import { recorder } from './recorder.mjs'
+import { node, openDemo } from './demo-lib.mjs'
 
-const server = {
-  id: 'demo-mysql',
-  name: 'Music Store',
-  method: 'tcp',
-  host: '127.0.0.1',
-  port: 33070,
-  socket: '',
-  user: 'root',
-  defaultSchema: 'Chinook',
-  ssl: { mode: 'preferred', ca: '', cert: '', key: '', cipher: '' },
-  ssh: { host: '', port: 22, user: '', keyFile: '' },
-  options: { compress: false, connectTimeout: 10, sqlMode: '', others: '' }
-}
-
-const userData = profileWith([server])
-writeFileSync(join(userData, 'settings.json'), JSON.stringify({ language: 'en_US', theme: process.env.DEMO_THEME ?? 'dark', window: { width: 1280, height: 800 } }))
-const { app, page } = await launch(userData)
+const { app, page, editor } = await openDemo()
 try {
-  await page.locator('.tile', { hasText: server.name }).dblclick()
-  await page.locator('input[type=password]').fill('test')
-  await page.keyboard.press('Enter')
-  const editor = page.locator('.workspace:visible .editor-page:visible .monaco-editor').first()
-  await editor.waitFor()
   // the schema and its tables open in the navigator
-  const node = (label) => page.locator('.workspace:visible .node', { has: page.locator('.label', { hasText: new RegExp(`^${label}$`) }) }).first()
-  await node('Chinook').locator('.twisty').dispatchEvent('mousedown')
-  await node('Tables').locator('.twisty').dispatchEvent('mousedown')
-  await node('Track').waitFor()
+  await node(page, 'Chinook').locator('.twisty').dispatchEvent('mousedown')
+  await node(page, 'Tables').locator('.twisty').dispatchEvent('mousedown')
+  await node(page, 'Track').waitFor()
   await page.waitForTimeout(1500)
   await shot(page, 'demo-editor-start')
   if (process.env.DEMO_EXPLORE) process.exit(0)

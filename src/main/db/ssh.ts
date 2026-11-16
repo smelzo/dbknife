@@ -35,11 +35,18 @@ export function connectSsh(opts: SshOptions): Promise<Client> {
     })
     // Stays attached after 'ready': an 'error' event without a listener would crash the main process.
     client.on('error', (err: Error & { level?: string }) => {
-      if (ready) return
+      // An agent that cannot be reached (on Windows its pipe is always tried, also with the service
+      // stopped) is not the end: ssh2 goes on with the next method, then emits 'ready' or its own error.
+      if (ready || err.level === 'agent') return
       if (hostKeyRejected) reject(new SshError(t('main.ssh.hostKeyChanged', { host: opts.host }), 'hostkey'))
       else if (err.level === 'client-authentication') reject(new SshError(t('main.ssh.authFailed'), 'auth'))
       else if (/passphrase/i.test(err.message)) reject(new SshError(err.message, 'passphrase'))
       else reject(new SshError(t('main.ssh.error', { error: err.message }), 'network'))
+    })
+
+    // The server closing while authenticating emits no error: without this the promise would stay pending.
+    client.on('close', () => {
+      if (!ready) reject(new SshError(t('main.channel.connectionLost'), 'network'))
     })
 
     try {

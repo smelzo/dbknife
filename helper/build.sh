@@ -6,8 +6,13 @@ cd "$(dirname "$0")"
 out=../bin/remote
 mkdir -p "$out"
 # The executables go into a public repository: no path of the build machine in them.
-# Of two prefixes that match, rustc applies the last one.
-export RUSTFLAGS="--remap-path-prefix=$HOME=~ --remap-path-prefix=$(pwd -P)=helper"
+# Of two prefixes that match, rustc applies the last one. The flags are separated by the
+# byte 037, not by spaces, so that a path may contain them.
+CARGO_ENCODED_RUSTFLAGS=$(printf -- '--remap-path-prefix=%s=~\037--remap-path-prefix=%s=helper' "$HOME" "$(pwd -P)")
+export CARGO_ENCODED_RUSTFLAGS
+# Functions and virtual tables that the app's own SQLite (node:sqlite) has and the build of
+# libsqlite3-sys leaves out: a view or a generated column may use them.
+export LIBSQLITE3_FLAGS="SQLITE_ENABLE_MATH_FUNCTIONS SQLITE_ENABLE_PERCENTILE SQLITE_ENABLE_GEOPOLY"
 
 # build <cargo subcommand> <target> <platform>-<arch>
 build() {

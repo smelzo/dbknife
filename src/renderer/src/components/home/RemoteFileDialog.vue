@@ -73,7 +73,10 @@ function fill(n: Node, entries: RemoteListing['entries']): void {
   n.children = entries.map((e) => newNode(n, e.name, e.dir, e.size))
 }
 
-/** Lists a folder; a failure (permission denied) is shown on the folder and tried again when it is expanded again. */
+/**
+ * Lists a folder; a failure (permission denied) is shown on the folder. Expanding it again tries again as long
+ * as it has no entries: not so a folder on the way to the start one, which keeps the entry openStart gave it.
+ */
 async function load(n: Node): Promise<void> {
   n.loading = true
   const listing = await window.api.channels.browseList(browseId, n.path)
@@ -85,7 +88,8 @@ async function load(n: Node): Promise<void> {
 function toggle(n: Node): void {
   if (!n.dir) return
   n.open = !n.open
-  if (n.open && !n.children) void load(n)
+  // closed and opened again before the answer: the listing on its way is the one awaited
+  if (n.open && !n.children && !n.loading) void load(n)
 }
 
 /** Opens the tree down to the folder of `start`, or to the home folder when that one cannot be listed. */
@@ -134,6 +138,8 @@ onMounted(async () => {
   await openStart()
   connecting.value = false
   await nextTick()
+  // the password prompt, closing, left the focus on the body: the keys would reach neither the tree nor the dialog
+  list.value?.focus()
   rowOf(selected.value)?.scrollIntoView({ block: 'start' })
 })
 
@@ -149,6 +155,8 @@ function activate(n: Node): void {
 }
 
 function onKey(e: KeyboardEvent): void {
+  // openStart is still filling the tree: a folder toggled now would be listed twice, the second answer replacing its nodes
+  if (connecting.value) return
   const i = rows.value.findIndex((n) => n.path === selected.value)
   const node = rows.value[i]
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {

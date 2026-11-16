@@ -9,7 +9,7 @@ import { allowClose } from './close-guard'
 import { createSession } from './db/create-session'
 import { CsvSession } from './db/drivers/csv'
 import { expandHome, isAuthError, toDbError, usesPassword, type DbSession } from './db/session'
-import { TunnelError } from './db/tunnel'
+import { SshError } from './db/ssh'
 import { i18nInfo, installLanguage, languagesDir, listInstalled, loadLanguage, removeLanguage } from './i18n'
 import { buildMenu, setMenuState } from './menu'
 import { readSpread, spreadAvailable, writeXlsx } from './spread'
@@ -81,7 +81,7 @@ async function openSession(config: ConnectionConfig, creds: Credentials): Promis
     session = createSession(config, secrets, store.getSettings().safeUpdates)
     await session.open()
   } catch (err) {
-    if (err instanceof TunnelError) {
+    if (err instanceof SshError) {
       const needs = err.kind === 'auth' ? 'sshPassword' : err.kind === 'passphrase' ? 'sshPassphrase' : undefined
       return { result: { ok: false, error: { message: err.message }, needs } }
     }

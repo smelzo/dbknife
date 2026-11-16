@@ -214,10 +214,13 @@ class StartError extends Error {
 /**
  * Starts the helper and resolves once it has answered a request: exec gives its
  * stream at once, also for a file that is not there, and the exit code comes later.
+ * The command goes through `sh`, so that 127 and 126 mean the same whatever the
+ * user's login shell is (csh ends with 1 for a missing file); `exec` leaves no
+ * shell between SSH and the helper, which must see the end of stdin itself.
  */
 function launch(client: Client, name: string): Promise<HelperLink> {
   return new Promise((resolve, reject) => {
-    client.exec(`./${remoteDir}/${name}`, (err, stream) => {
+    client.exec(`sh -c 'exec ./${remoteDir}/${name}'`, (err, stream) => {
       if (err) return reject(err)
       const link = new HelperLink(stream)
       stream.on('close', (code?: number | null, signal?: string) =>

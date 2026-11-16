@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
-import type { ConnectionConfig, ConnectionEnvironment, Engine, SecretKind } from '@shared/types'
+import { computed, reactive, ref } from 'vue'
+import type { Channel, ConnectionConfig, ConnectionEnvironment, Engine, SecretKind } from '@shared/types'
 import { sqliteExtensions } from '@shared/file-types'
-import { alertError, prompt } from '@/dialogs'
+import { alertError, confirm, openDialog, prompt } from '@/dialogs'
 import { t } from '@/i18n'
-import { environmentLabel, withCredentials } from '@/stores/app'
+import { channelOf, environmentLabel, useApp, withCredentials } from '@/stores/app'
 import { engineLabels } from '@/workspace/engines'
 import Modal from '../common/Modal.vue'
+import ChannelEditor from './ChannelEditor.vue'
+import RemoteFileDialog from './RemoteFileDialog.vue'
 
 /** The "Setup New Connection" dialog. Resolves with the saved config. */
 const props = defineProps<{ config: ConnectionConfig; isNew: boolean }>()
 const emit = defineEmits<{ close: [saved?: ConnectionConfig] }>()
 
+const app = useApp()
 const c = reactive<ConnectionConfig>(JSON.parse(JSON.stringify(props.config)))
 const page = ref<'parameters' | 'ssl' | 'advanced'>('parameters')
 const testing = ref(false)
@@ -82,7 +85,44 @@ async function newDatabaseFile(): Promise<void> {
   if (path) c.file = path
 }
 
-const snapshot = (): ConnectionConfig => JSON.parse(JSON.stringify(c))
+/** The channel chosen; undefined for a local file, and for a channel that is no longer among the saved ones. */
+const channel = computed(() => channelOf(c))
+
+/** "None" leaves no channel field in the saved config: the file is then a local one. */
+function setChannel(id: string): void {
+  if (id) c.channel = id
+  else delete c.channel
+}
+
+/** New channel, or the chosen one to edit; the channel saved becomes the chosen one. */
+async function editChannel(existing?: Channel): Promise<void> {
+  const saved = await openDialog<Channel>(ChannelEditor, { channel: existing })
+  if (saved) c.channel = saved.id
+}
+
+async function deleteChannel(): Promise<void> {
+  const { id, name } = channel.value!
+  if (!(await confirm(t('connection.channel.deleteMessage', { name }), t('connection.channel.deleteDetail'), t('common.delete')))) return
+  const users = await window.api.channels.remove(id)
+  if (users.length) {
+    await alertError(t('connection.channel.inUse', { name }), users.join('\n'))
+    return
+  }
+  delete c.channel
+  await app.loadChannels()
+}
+
+async function chooseRemoteFile(): Promise<void> {
+  const path = await openDialog<string>(RemoteFileDialog, { channel: channel.value, start: c.file })
+  if (path) c.file = path
+}
+
+function snapshot(): ConnectionConfig {
+  const config: ConnectionConfig = JSON.parse(JSON.stringify(c))
+  // only a SQLite file is reached through a channel
+  if (config.engine !== 'sqlite') delete config.channel
+  return config
+}
 
 /** A PostgreSQL or SQL Server session is bound to one database: it must be named. */
 async function missingDatabase(): Promise<boolean> {
@@ -172,14 +212,29 @@ async function cancel(): Promise<void> {
     </div>
     <div class="page-box">
       <div v-if="page === 'parameters' && c.engine === 'sqlite'" class="form-grid">
-        <label for="ce-file">{{ t('connection.file') }}</label>
+        <label for="ce-channel">{{ t('connection.channel') }}</label>
         <div class="row">
-          <input id="ce-file" v-model="c.file" type="text" class="grow" :placeholder="t('connection.filePlaceholder')" />
-          <button :title="t('connection.chooseDatabase')" @click="chooseFile('database')">…</button>
-          <button :title="t('connection.createDatabase')" @click="newDatabaseFile">{{ t('connection.newFile') }}</button>
+          <select id="ce-channel" class="grow" :value="c.channel ?? ''" @change="setChannel(($event.target as HTMLSelectElement).value)">
+            <option value="">{{ t('connection.channel.none') }}</option>
+            <!-- a channel removed from the saved ones: the connection keeps it until another choice is made -->
+            <option v-if="c.channel && !channel" :value="c.channel">{{ t('connection.channel.missing') }}</option>
+            <option v-for="ch in app.channels" :key="ch.id" :value="ch.id">{{ ch.name }}</option>
+          </select>
+          <button id="ce-channel-new" @click="editChannel()">{{ t('connection.channel.new') }}</button>
+          <button id="ce-channel-edit" :disabled="!channel" @click="editChannel(channel)">{{ t('connection.channel.edit') }}</button>
+          <button id="ce-channel-delete" :disabled="!channel" @click="deleteChannel">{{ t('common.delete') }}</button>
         </div>
-        <span />
-        <span class="muted">{{ t('connection.fileCreated') }}</span>
+        <label for="ce-file">{{ t('connection.file') }}</label>
+        <!-- with a channel the file is a path on its machine: chosen from the tree of that machine, never created -->
+        <div class="row">
+          <input id="ce-file" v-model="c.file" type="text" class="grow" :placeholder="t(c.channel ? 'connection.remoteFilePlaceholder' : 'connection.filePlaceholder')" />
+          <button id="ce-file-choose" :title="t('connection.chooseDatabase')" :disabled="!!c.channel && !channel" @click="c.channel ? chooseRemoteFile() : chooseFile('database')">…</button>
+          <button v-if="!c.channel" :title="t('connection.createDatabase')" @click="newDatabaseFile">{{ t('connection.newFile') }}</button>
+        </div>
+        <template v-if="!c.channel">
+          <span />
+          <span class="muted">{{ t('connection.fileCreated') }}</span>
+        </template>
       </div>
       <div v-else-if="page === 'parameters'" class="form-grid">
         <template v-if="c.method === 'ssh'">

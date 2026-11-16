@@ -44,6 +44,8 @@ All versions and their changes are on the [Releases](https://github.com/smelzo/d
   spreadsheets (xlsx, xls, ods) into a table.
 - **Files**: SQLite databases and CSV files open like a connection. A CSV file is edited as a table
   and saved back in its own format.
+- **Remote SQLite**: a SQLite database on another machine opens over SSH (password, key file,
+  agent) like a local one, without copying the file or installing anything on the server by hand.
 - **Connections** over SSH tunnels (password, key file, agent) and SSL, with passwords kept in the
   system keychain. Each connection can be marked Production, Staging, Test or Development, and
   shows it on its tab.

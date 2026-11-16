@@ -40,7 +40,9 @@ export class RemoteSqliteSession extends SqliteSession {
       throw new Error(t('main.session.closed'))
     }
     // dropped by the network or ended by the server: the next link opens another
-    client.on('close', () => (this.client = undefined))
+    client.on('close', () => {
+      if (this.client === client) this.client = undefined
+    })
     this.client = client
   }
 
@@ -54,7 +56,9 @@ export class RemoteSqliteSession extends SqliteSession {
       // also the links that were waiting their turn when the session was closed
       if (this.closed) throw new Error(t('main.session.closed'))
       if (!this.client) await this.prepare()
-      return startHelper(this.client!)
+      const client = this.client
+      if (!client) throw new Error(t('main.channel.connectionLost'))
+      return startHelper(client)
     })
     this.lastStart = link.catch(() => undefined)
     return link

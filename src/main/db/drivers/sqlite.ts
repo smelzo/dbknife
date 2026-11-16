@@ -78,6 +78,8 @@ export class SqliteSession implements DbSession {
   info!: ServerInfo
   private user?: SqliteLink
   private aux?: SqliteLink
+  /** The auxiliary connection being reopened. */
+  private auxOpening?: Promise<SqliteLink>
   private interrupted?: SqliteLink
   private autocommit = true
 
@@ -171,8 +173,12 @@ export class SqliteSession implements DbSession {
 
   /** A request on the auxiliary connection, reopened if its process ended. */
   protected async auxRequest(req: SqliteRequest): Promise<SqliteResponse> {
-    if (!this.aux?.alive) this.aux = await this.connect()
-    return this.aux.request(req)
+    if (this.aux?.alive) return this.aux.request(req)
+    // requests coming together wait for the same connection: each opening its own would leave all but the last unused
+    this.auxOpening ??= this.connect()
+      .then((link) => (this.aux = link))
+      .finally(() => (this.auxOpening = undefined))
+    return (await this.auxOpening).request(req)
   }
 
   /** A request on the user connection; none when its process ended (after Stop). */

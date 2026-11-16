@@ -242,10 +242,14 @@ function launch(client: Client, name: string): Promise<HelperLink> {
 /**
  * Uploads the helper with one exec, the file on stdin: readable and executable by
  * the user alone, in place only when complete, the helpers of other versions removed.
- * `name` holds only [a-z0-9-]: nothing the user typed is part of the command.
+ * Complete means of the size sent: when the connection drops `cat` sees the end of
+ * stdin and succeeds, and a cut file under the final name would never be replaced.
+ * `wc` pads its count on macOS, hence the unquoted, numeric comparison.
+ * `name` holds only [a-z0-9-] and the size is a number of this side: nothing the
+ * user typed is part of the command.
  */
 async function install(client: Client, { name, content }: HelperBinary): Promise<void> {
-  const command = `sh -c 'umask 077; d=${remoteDir}; mkdir -p $d && cat > $d/${name}.tmp && chmod 700 $d/${name}.tmp && mv $d/${name}.tmp $d/${name} && find $d -name "dbknife-sqlite-*" ! -name "${name}" -delete'`
+  const command = `sh -c 'umask 077; d=${remoteDir}; mkdir -p $d && cat > $d/${name}.tmp && [ $(wc -c < $d/${name}.tmp) -eq ${content.length} ] && chmod 700 $d/${name}.tmp && mv $d/${name}.tmp $d/${name} && find $d -name "dbknife-sqlite-*" ! -name "${name}" -delete'`
   const exit = await run(client, command, content)
   if (exit.code !== 0) throw new Error(failed('main.channel.installFailed', 'sh', exit))
 }

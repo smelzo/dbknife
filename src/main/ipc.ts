@@ -179,8 +179,8 @@ export function registerIpc(): void {
     if (!users.length) store.removeChannel(id)
     return users
   })
-  ipcMain.handle('channels:browseOpen', async (_e, channelId: string, creds: Credentials): Promise<ChannelResult> => {
-    const channel = store.getChannel(channelId)
+  ipcMain.handle('channels:browseOpen', async (_e, id: string, creds: Credentials): Promise<ChannelResult> => {
+    const channel = store.getChannel(id)
     if (!channel) return { ok: false, error: { message: t('main.channel.notFound') } }
     return useChannel(channel, creds, async (secrets) => ({ browseId: await browseOpen(channel, secrets) }))
   })

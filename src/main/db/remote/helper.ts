@@ -123,8 +123,9 @@ export class HelperLink {
     let res: WireResponse
     if (size > constants.MAX_STRING_LENGTH) res = failure(t('main.channel.resultTooLarge'))
     else {
-      const line = Buffer.concat(chunks, size).toString()
       try {
+        // inside the try: joining a line close to the limit may fail too
+        const line = Buffer.concat(chunks, size).toString()
         const parsed: unknown = JSON.parse(line)
         // valid JSON, yet not a response: a number or a text printed by something else
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error(line.slice(0, 200))

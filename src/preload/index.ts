@@ -20,6 +20,14 @@ const api: Api = {
     reorder: invoke('connections:reorder'),
     importWorkbench: invoke('connections:importWorkbench')
   },
+  channels: {
+    list: invoke('channels:list'),
+    save: invoke('channels:save'),
+    remove: invoke('channels:remove'),
+    browseOpen: invoke('channels:browseOpen'),
+    browseList: invoke('channels:browseList'),
+    browseClose: invoke('channels:browseClose')
+  },
   secrets: {
     status: invoke('secrets:status'),
     set: invoke('secrets:set'),

@@ -178,7 +178,8 @@ export async function newSqliteDatabase(): Promise<void> {
   })
   if (!file) return
   const app = useApp()
-  if (app.workspaces.some((w) => w.config.file === file)) {
+  // a connection through a channel has a path of another machine
+  if (app.workspaces.some((w) => !w.config.channel && w.config.file === file)) {
     await alertError(t('database.sqliteInUse', { file }))
     return
   }

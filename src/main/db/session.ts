@@ -67,6 +67,13 @@ export function explainStatement(engine: Engine, sql: string): string {
   return prefix + sql
 }
 
+/**
+ * Id of the channel a connection opens its file through: SQLite database files only, whatever
+ * `channel` holds for the others (their SSH secrets are the connection's own).
+ */
+export const channelId = (config: ConnectionConfig): string | undefined =>
+  config.engine === 'sqlite' && !config.csv ? config.channel || undefined : undefined
+
 /** Whether the engine needs a password to open a session. */
 export const usesPassword = (engine: Engine): boolean => engine !== 'sqlite'
 

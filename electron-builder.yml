@@ -69,3 +69,7 @@ extraResources:
     to: bin
   - from: bin/d-spread-LICENSE.txt
     to: d-spread-LICENSE.txt
+  # dbknife-sqlite (helper/build.sh) runs on the machine of a remote SQLite database: every
+  # package carries the builds for all the server platforms
+  - from: bin/remote
+    to: bin/remote

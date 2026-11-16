@@ -44,6 +44,8 @@ All versions and their changes are on the [Releases](https://github.com/smelzo/d
   spreadsheets (xlsx, xls, ods) into a table.
 - **Files**: SQLite databases and CSV files open like a connection. A CSV file is edited as a table
   and saved back in its own format.
+- **Remote SQLite**: a SQLite database on another machine opens over SSH (password, key file,
+  agent) like a local one, without copying the file or installing anything on the server by hand.
 - **Connections** over SSH tunnels (password, key file, agent) and SSL, with passwords kept in the
   system keychain. Each connection can be marked Production, Staging, Test or Development, and
   shows it on its tab.
@@ -103,6 +105,11 @@ pnpm build && pnpm exec electron-builder -c.mac.identity=null   # unsigned packa
 
 `bin/` holds prebuilt executables of d-spread, the helper that reads and writes
 spreadsheets, with its license in `bin/d-spread-LICENSE.txt`.
+
+`bin/remote/` holds prebuilt executables of dbknife-sqlite, the small program the app copies to
+`~/.cache/dbknife` on the machine of a remote SQLite database and runs there over SSH. Its source
+is in `helper/` (`sh helper/build.sh` rebuilds the executables), its notices in
+`bin/remote/NOTICE.txt`.
 
 ## License
 

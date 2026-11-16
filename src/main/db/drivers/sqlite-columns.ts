@@ -9,6 +9,12 @@ export interface SqliteColumn {
   type: string | null
 }
 
+/**
+ * The statements whose changed rows and last insert rowid are reported: sqlite3_changes()
+ * keeps the count of the last one of them, also after a statement of another kind.
+ */
+export const dmlKinds: ReadonlySet<string> = new Set(['INSERT', 'REPLACE', 'UPDATE', 'DELETE', 'WITH'])
+
 /** Type affinity of a declared column type (https://www.sqlite.org/datatype3.html, 3.1). */
 export function typeAffinity(declared: string): 'INTEGER' | 'TEXT' | 'BLOB' | 'REAL' | 'NUMERIC' {
   const t = declared.toUpperCase()

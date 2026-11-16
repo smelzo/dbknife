@@ -1,6 +1,6 @@
 // Helpers to drive the built app with Playwright against the docker test servers
 // (see e2e/fixture.sql): MySQL 8.4 on 127.0.0.1:33061, MariaDB 11.4 on 127.0.0.1:33062;
-// SQL Server runs on the host named by DBM_MSSQL_HOST, port 1433 (see mssqlRelay, loadMssqlFixture).
+// SQL Server runs on the host named by DBM_MSSQL_HOST, port 1433 (see tcpRelay, loadMssqlFixture).
 import { _electron as electron } from 'playwright'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -50,24 +50,30 @@ const mssqlHost = process.env.DBM_MSSQL_HOST
 const mssqlLogin = { user: 'dbm_test', password: 'test' }
 
 /**
+ * A loopback port of this process relayed to `host:port`; resolves with the port.
  * macOS "Local Network" privacy keeps Electron away from LAN hosts (EHOSTUNREACH) until
  * someone allows it in a system prompt, which nobody answers on the e2e machine; the test
- * process itself may reach the VM, so the app connects to a loopback port relayed to it.
+ * process itself may reach them, so the app connects to the relay instead. The host is
+ * reached only when the app connects, and the relay ends with the script: it does not
+ * keep the process alive.
  */
-const mssqlRelay = createServer((client) => {
-  const upstream = tcpConnect(1433, mssqlHost)
-  client.pipe(upstream).pipe(client)
-  client.on('error', () => upstream.destroy())
-  upstream.on('error', () => client.destroy())
-})
-await new Promise((ok) => mssqlRelay.listen(0, '127.0.0.1', ok))
-mssqlRelay.unref()
+export async function tcpRelay(host, port) {
+  const relay = createServer((client) => {
+    const upstream = tcpConnect(port, host)
+    client.pipe(upstream).pipe(client)
+    client.on('error', () => upstream.destroy())
+    upstream.on('error', () => client.destroy())
+  })
+  await new Promise((ok) => relay.listen(0, '127.0.0.1', ok))
+  relay.unref()
+  return relay.address().port
+}
 
 export const servers = {
   mysql: conn('test-mysql', 'Test/MySQL 8.4', 33061),
   mariadb: conn('test-mariadb', 'Test/MariaDB 11.4', 33062),
-  // the VM through mssqlRelay
-  mssql: { ...conn('test-mssql', 'Test/SQL Server 2019', mssqlRelay.address().port), engine: 'mssql', user: mssqlLogin.user, database: 'dbm_test', defaultSchema: '', file: '' }
+  // the VM through a relay
+  mssql: { ...conn('test-mssql', 'Test/SQL Server 2019', await tcpRelay(mssqlHost, 1433)), engine: 'mssql', user: mssqlLogin.user, database: 'dbm_test', defaultSchema: '', file: '' }
 }
 
 /**

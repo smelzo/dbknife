@@ -25,6 +25,8 @@ export interface ConnectionConfig {
   database: string
   /** SQLite database file. */
   file: string
+  /** Id of the Channel to the machine holding the SQLite file: `file` is then a path on that machine. */
+  channel?: string
   defaultSchema: string
   ssl: { mode: SslMode; ca: string; cert: string; key: string; cipher: string }
   ssh: { host: string; port: number; user: string; keyFile: string }
@@ -36,6 +38,35 @@ export interface ConnectionConfig {
   temporary?: boolean
   /** CSV file opened as the only table of a hidden SQLite database (engine 'sqlite', temporary). */
   csv?: string
+}
+
+/** A verified link to another machine, saved with a name and used by SQLite connections. */
+export interface Channel {
+  id: string
+  name: string
+  kind: 'ssh'
+  host: string
+  port: number
+  user: string
+  /** Empty: ssh-agent or password. */
+  keyFile: string
+}
+
+export interface ChannelResult {
+  ok: boolean
+  error?: DbError
+  /** Which secret is missing or rejected, so the renderer can prompt for it. */
+  needs?: 'sshPassword' | 'sshPassphrase'
+  /** browseOpen: handle for browseList and browseClose. */
+  browseId?: string
+}
+
+/** The entries of a folder of a channel's machine. */
+export interface RemoteListing {
+  /** Absolute path of the folder. */
+  path: string
+  entries: { name: string; dir: boolean; size: number }[]
+  error?: string
 }
 
 /** State of a CSV connection against its file. */

@@ -14,8 +14,18 @@ import processPath from './sqlite-process?modulePath'
 /** How long a connection waits for a lock held by the other one (or another program). */
 const busyTimeoutMs = 5000
 
+/** One SQLite connection as a session uses it, wherever it runs. */
+export interface SqliteLink {
+  alive: boolean
+  /** A request is waiting for its answer. */
+  readonly busy: boolean
+  request(req: SqliteRequest): Promise<SqliteResponse>
+  /** Ends the connection: a statement running in SQLite stops, an open transaction rolls back. */
+  kill(): void
+}
+
 /** One SQLite connection living in its own utility process. */
-class Connection {
+class Connection implements SqliteLink {
   private child: UtilityProcess
   private seq = 0
   private pending = new Map<number, (r: SqliteResponse) => void>()
@@ -66,21 +76,32 @@ class Connection {
 export class SqliteSession implements DbSession {
   readonly id = randomUUID()
   info!: ServerInfo
-  private user?: Connection
-  private aux?: Connection
-  private interrupted?: Connection
+  private user?: SqliteLink
+  private aux?: SqliteLink
+  /** The auxiliary connection being reopened. */
+  private auxOpening?: Promise<SqliteLink>
+  private interrupted?: SqliteLink
   private autocommit = true
-  private readonly file: string
 
   constructor(
     readonly config: ConnectionConfig,
-    private readonly safeUpdates = false
-  ) {
-    this.file = resolve(expandHome(config.file.trim()))
+    private readonly safeUpdates = false,
+    private readonly file = resolve(expandHome(config.file.trim()))
+  ) {}
+
+  /** What open() needs before the first connection. */
+  protected async prepare(): Promise<void> {
+    // a missing file is created, but not its folder
+    if (!existsSync(dirname(this.file))) throw new Error(t('main.sqlite.missingFolder', { file: this.file, folder: dirname(this.file) }))
   }
 
-  private async connect(): Promise<Connection> {
-    const conn = new Connection()
+  /** Where a connection runs; connect() opens the database on it. */
+  protected async newLink(): Promise<SqliteLink> {
+    return new Connection()
+  }
+
+  private async connect(): Promise<SqliteLink> {
+    const conn = await this.newLink()
     const r = await conn.request({ op: 'open', file: this.file, busyTimeoutMs })
     if (r.error) {
       conn.kill()
@@ -91,8 +112,7 @@ export class SqliteSession implements DbSession {
 
   async open(): Promise<void> {
     if (!this.config.file.trim()) throw new Error(t('main.sqlite.noFile'))
-    // a missing file is created, but not its folder
-    if (!existsSync(dirname(this.file))) throw new Error(t('main.sqlite.missingFolder', { file: this.file, folder: dirname(this.file) }))
+    await this.prepare()
     this.user = await this.connect()
     try {
       const r = (await this.user.request({ op: 'execute', sql: 'SELECT sqlite_version()', autocommit: true })).result as ExecResult
@@ -153,8 +173,12 @@ export class SqliteSession implements DbSession {
 
   /** A request on the auxiliary connection, reopened if its process ended. */
   protected async auxRequest(req: SqliteRequest): Promise<SqliteResponse> {
-    if (!this.aux?.alive) this.aux = await this.connect()
-    return this.aux.request(req)
+    if (this.aux?.alive) return this.aux.request(req)
+    // requests coming together wait for the same connection: each opening its own would leave all but the last unused
+    this.auxOpening ??= this.connect()
+      .then((link) => (this.aux = link))
+      .finally(() => (this.auxOpening = undefined))
+    return (await this.auxOpening).request(req)
   }
 
   /** A request on the user connection; none when its process ended (after Stop). */

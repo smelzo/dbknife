@@ -1,6 +1,7 @@
 //! The operations on the database, with the results node:sqlite gives the local driver.
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use regex::Regex;
@@ -29,7 +30,7 @@ impl From<Error> for Failure {
 }
 
 /// Opens an existing file: a mistyped path must not leave an empty database on the server.
-pub fn open(file: &str, busy_timeout_ms: u64) -> Result<Connection, Failure> {
+pub fn open(file: &Path, busy_timeout_ms: u64) -> Result<Connection, Failure> {
     let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX;
     let db = Connection::open_with_flags(file, flags).map_err(|err| match err {
         // rusqlite appends the path to the message: without it, the text is SQLite's

@@ -5,6 +5,9 @@ set -eu
 cd "$(dirname "$0")"
 out=../bin/remote
 mkdir -p "$out"
+# The executables go into a public repository: no path of the build machine in them.
+# Of two prefixes that match, rustc applies the last one.
+export RUSTFLAGS="--remap-path-prefix=$HOME=~ --remap-path-prefix=$(pwd -P)=helper"
 
 # build <cargo subcommand> <target> <platform>-<arch>
 build() {

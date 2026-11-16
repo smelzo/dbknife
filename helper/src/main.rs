@@ -2,6 +2,7 @@
 //! it to DBKnife over stdin/stdout (see protocol.rs).
 mod cell;
 mod list;
+mod path;
 mod protocol;
 mod sqlite;
 
@@ -103,7 +104,7 @@ fn run(
             file,
             busy_timeout_ms,
         } => {
-            let connection = sqlite::open(&file, busy_timeout_ms)?;
+            let connection = sqlite::open(&path::resolve(&file)?, busy_timeout_ms)?;
             *interrupt.lock().unwrap() = Some(connection.get_interrupt_handle());
             *db = Some(connection);
             Ok(Reply::Opened {})

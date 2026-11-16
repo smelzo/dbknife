@@ -1,17 +1,11 @@
-use std::env;
 use std::fs;
-use std::path::PathBuf;
 
+use crate::path;
 use crate::protocol::{Entry, Failure, Reply};
 
 /// The content of a directory, folders first; an empty path is the user's home.
 pub fn list(path: &str) -> Result<Reply, Failure> {
-    let dir = if path.is_empty() {
-        PathBuf::from(env::var_os("HOME").ok_or_else(|| Failure::new("HOME is not set"))?)
-    } else {
-        PathBuf::from(path)
-    };
-    let dir = fs::canonicalize(dir)?;
+    let dir = fs::canonicalize(path::resolve(if path.is_empty() { "~" } else { path })?)?;
     let mut entries: Vec<Entry> = fs::read_dir(&dir)?
         .filter_map(|entry| {
             let entry = entry.ok()?;

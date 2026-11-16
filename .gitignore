@@ -4,6 +4,7 @@ dist/
 e2e/output/
 .DS_Store
 out-*/
+helper/target/
 # private: notes, plans and scripts of the author, a git repo of their own
 /.claude/
 /CLAUDE.md

@@ -15,6 +15,15 @@
   --color-surface: light-dark(#ffffff, #12233a);
   --color-focus: #f5b83d;
 
+  /* the illustrations of the cards: the blues of the app icon with a warm accent */
+  --color-art-ink: light-dark(#14467f, #a9c9f2);
+  --color-art-fill: light-dark(#e6effa, #1b3354);
+  --color-art-blue: light-dark(#2f7fd8, #3b8de6);
+  --color-art-warm: #f5b83d;
+  --color-art-light: #ffffff;
+  --color-art-on-warm: #14467f;
+  --shadow-card: 0 1px 2px rgb(15 37 66 / 0.06), 0 0.5rem 1.5rem -0.75rem rgb(15 37 66 / 0.18);
+
   --font-sans: "Schibsted Grotesk", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
@@ -248,12 +257,8 @@ main {
   font-size: var(--text-sm);
 }
 
-/* --- strips: the databases and the systems; names only, since the logos are trademarks
-   whose rules don't allow this use (Oracle, Microsoft and Apple want a license) --- */
-
-.symbols {
-  position: absolute;
-}
+/* --- strips: the databases with the marks the app uses (simple-icons, CC0), the systems
+   evoked by icons of our own, since Apple and Microsoft don't allow their logos here --- */
 
 .strip {
   padding-top: var(--space-xl);
@@ -297,11 +302,30 @@ main {
   width: 3rem;
   height: 3rem;
   margin-bottom: 0.3rem;
+  color: var(--color-link);
+}
+
+.strip__icon--mark {
+  fill: currentColor;
+}
+
+.strip__icon--line {
   fill: none;
-  stroke: var(--color-link);
-  stroke-width: 2.5;
+  stroke: currentColor;
+  stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* Tux's beak and feet */
+.strip__accent {
+  fill: var(--color-art-warm);
+  stroke: var(--color-art-warm);
+}
+
+.strip__dot {
+  fill: currentColor;
+  stroke: none;
 }
 
 .strip__note {
@@ -311,30 +335,140 @@ main {
   font-weight: 400;
 }
 
-/* --- features ------------------------------------------------------------- */
+/* --- features: cards with an illustration, a title and a line ------------- */
 
-.features {
+.cards {
   display: grid;
-  gap: var(--space-lg) var(--space-xl);
+  gap: var(--space-md);
   margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-@media (min-width: 48rem) {
-  .features {
-    grid-template-columns: 1fr 1fr;
+/* 2 or 4 columns, so that the 8 cards always fill their rows */
+@media (min-width: 36rem) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-.feature dt {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  line-height: 1.3;
+@media (min-width: 64rem) {
+  .cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
-.feature dd {
-  max-width: 34rem;
-  margin: 0.35rem 0 0;
+.card {
+  /* the rows of the cards side by side are shared, so their lines are at the same height */
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+  justify-items: center;
+  padding: var(--space-lg) var(--space-md) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+
+.card__art {
+  width: 4.5rem;
+  height: 4.5rem;
+  margin-bottom: var(--space-sm);
+}
+
+.card__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+/* the line under the title */
+.card__text {
+  width: 100%;
+  margin: var(--space-sm) 0 0;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
   color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-wrap: pretty;
+}
+
+/* the parts of the illustrations */
+.card__art * {
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.art__fill {
+  fill: var(--color-art-fill);
+  stroke: var(--color-art-ink);
+}
+
+.art__line {
+  fill: none;
+  stroke: var(--color-art-ink);
+}
+
+.art__blue {
+  fill: var(--color-art-blue);
+  stroke: var(--color-art-ink);
+}
+
+.art__warm {
+  fill: var(--color-art-warm);
+  stroke: var(--color-art-ink);
+}
+
+.art__warm-cell {
+  fill: var(--color-art-warm);
+}
+
+.art__warm-dash {
+  fill: none;
+  stroke: var(--color-art-warm);
+  stroke-dasharray: 4 4;
+}
+
+.art__warm-line,
+.art__warm-arrow {
+  fill: none;
+  stroke: var(--color-art-warm);
+  stroke-width: 3.5;
+}
+
+.art__code,
+.art__chart {
+  fill: none;
+  stroke: var(--color-art-blue);
+  stroke-width: 3.5;
+}
+
+.art__area {
+  fill: var(--color-art-blue);
+  opacity: 0.18;
+}
+
+.art__light,
+.art__check {
+  fill: none;
+  stroke: var(--color-art-light);
+  stroke-width: 3.5;
+}
+
+.art__check {
+  stroke-width: 5;
+}
+
+.art__dark {
+  fill: none;
+  stroke: var(--color-art-on-warm);
+  stroke-width: 3.5;
 }
 
 /* --- tables --------------------------------------------------------------- */

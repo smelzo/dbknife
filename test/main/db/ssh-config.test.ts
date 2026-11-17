@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseConfig, parseProxyJump } from '../../../src/main/db/ssh-config'
+import { expandTokens, parseConfig, parseProxyJump } from '../../../src/main/db/ssh-config'
 
 // Expected values from ssh_config(5): keywords are case-insensitive, separated from their
 // arguments by spaces or by one `=`; arguments may be in double quotes; Host takes several
@@ -29,6 +29,11 @@ describe('parseConfig', () => {
       { host: 'last' }
     ])
   })
+})
+
+// bug: `IdentityFile ~/.ssh/keys/%h_%r_key` taken as a file name, which does not exist: the key is skipped and a password asked
+it('expandTokens replaces the tokens of an IdentityFile, %% with a percent sign, and leaves those it has no value for', () => {
+  expect(expandTokens('/home/keys/%h_%r_key-%p%%-%C', { h: 'real.example.org', r: 'ann', p: '2201' })).toBe('/home/keys/real.example.org_ann_key-2201%-%C')
 })
 
 // ssh_config(5), ProxyJump: [user@]host[:port] or an ssh URI, several separated by commas and

@@ -4,7 +4,7 @@
 // and `Host *` itself.
 import { execFile } from 'node:child_process'
 import { glob, readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { homedir, userInfo } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 import { t } from '@shared/i18n'
 import { expandHome } from './session'
@@ -68,6 +68,13 @@ export function parseProxyJump(value: string): JumpSpec[] {
     return m ? { host: m[1], user, port: m[2] ? Number(m[2]) : undefined } : { host: rest, user }
   })
 }
+
+/**
+ * A value of the configuration with its `%` tokens replaced (ssh_config(5), TOKENS): `ssh -G`
+ * prints IdentityFile as it is written. `%%` is a percent sign; a token without a value stays.
+ */
+export const expandTokens = (value: string, tokens: Record<string, string>): string =>
+  value.replace(/%(.)/g, (match, token: string) => (token === '%' ? '%' : (tokens[token] ?? match)))
 
 /** DBM_SSH_CONFIG (tests): the only configuration file, in place of the user's and the system's. */
 const configOverride = (): string | undefined => process.env.DBM_SSH_CONFIG || undefined
@@ -163,12 +170,17 @@ async function hopsTo(target: JumpSpec, via: JumpSpec[] | undefined, origin: str
   const config = await resolvedConfig(target)
   const one = (keyword: string): string | undefined => config.get(keyword)?.[0]
   const host = one('hostname') ?? target.host
+  const port = Number(one('port')) || 22
+  const username = one('user') ?? ''
+  // d: local home, h: resolved host name, n: the name given, p: port, r: remote user, u: local user
+  const tokens = { d: homedir(), h: host, n: target.host, p: String(port), r: username, u: userInfo().username }
   const hop: SshHop = {
     alias: target.host,
     host,
-    port: Number(one('port')) || 22,
-    username: one('user') ?? '',
-    keyFiles: (config.get('identityfile') ?? []).map(expandHome),
+    port,
+    username,
+    // in the order of OpenSSH: ~ first, then the tokens
+    keyFiles: (config.get('identityfile') ?? []).map((file) => expandTokens(expandHome(file), tokens)),
     agent: one('identitiesonly') !== 'yes',
     hostKeyName: one('hostkeyalias') ?? host
   }

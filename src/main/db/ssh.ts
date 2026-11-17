@@ -33,11 +33,15 @@ export interface SshHop {
 export class SshError extends Error {
   constructor(
     message: string,
-    readonly kind: 'auth' | 'passphrase' | 'hostkey' | 'network'
+    readonly kind: 'auth' | 'passphrase' | 'hostkey' | 'network',
+    /** The cause as ssh2 words it, when `message` only adds "SSH:" in front of it. */
+    readonly detail?: string
   ) {
     super(message)
   }
 }
+
+const networkError = (detail: string): SshError => new SshError(t('main.ssh.error', { error: detail }), 'network', detail)
 
 const agentSocket = (): string | undefined => process.env.SSH_AUTH_SOCK ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
 
@@ -68,7 +72,7 @@ function open(
       if (hostKeyRejected) reject(new SshError(t('main.ssh.hostKeyChanged', { host: hostName }), 'hostkey'))
       else if (err.level === 'client-authentication') reject(authFailed())
       else if (/passphrase/i.test(err.message)) reject(new SshError(err.message, 'passphrase'))
-      else reject(new SshError(t('main.ssh.error', { error: err.message }), 'network'))
+      else reject(networkError(err.message))
     })
 
     // The server closing while authenticating emits no error: without this the promise would stay pending.
@@ -153,7 +157,12 @@ async function connectHop(
 /** A stream to `host:port` opened by the machine `client` is connected to. */
 const forward = (client: Client, host: string, port: number): Promise<Duplex> =>
   new Promise((resolve, reject) => {
-    client.forwardOut('127.0.0.1', 0, host, port, (err, stream) => (err ? reject(new SshError(t('main.ssh.error', { error: err.message }), 'network')) : resolve(stream)))
+    try {
+      client.forwardOut('127.0.0.1', 0, host, port, (err, stream) => (err ? reject(networkError(err.message)) : resolve(stream)))
+    } catch (err) {
+      // thrown, not given to the callback, when the connection has dropped since its 'ready'
+      reject(networkError((err as Error).message))
+    }
   })
 
 /**
@@ -181,7 +190,7 @@ export async function connectSshChain(
         jumps.push(await connectHop(hop, { passphrase: '' }, through && (await forward(through, hop.host, hop.port)), verifyHostKey))
       } catch (err) {
         if (!(err instanceof SshError)) throw err
-        throw new SshError(t('main.ssh.jumpFailed', { host: hop.alias, error: err.message }), err.kind === 'hostkey' ? 'hostkey' : 'network')
+        throw new SshError(t('main.ssh.jumpFailed', { host: hop.alias, error: err.detail ?? err.message }), err.kind === 'hostkey' ? 'hostkey' : 'network')
       }
     }
     const destination = hops[hops.length - 1]

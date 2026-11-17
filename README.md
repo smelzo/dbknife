@@ -46,6 +46,7 @@ All versions and their changes are on the [Releases](https://github.com/smelzo/d
   and saved back in its own format.
 - **Remote SQLite**: a SQLite database on another machine opens over SSH (password, key file,
   agent) like a local one, without copying the file or installing anything on the server by hand.
+  The machine can be a host of your own SSH configuration (`~/.ssh/config`), `ProxyJump` included.
 - **Connections** over SSH tunnels (password, key file, agent) and SSL, with passwords kept in the
   system keychain. Each connection can be marked Production, Staging, Test or Development, and
   shows it on its tab.

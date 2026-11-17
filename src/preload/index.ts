@@ -26,7 +26,8 @@ const api: Api = {
     remove: invoke('channels:remove'),
     browseOpen: invoke('channels:browseOpen'),
     browseList: invoke('channels:browseList'),
-    browseClose: invoke('channels:browseClose')
+    browseClose: invoke('channels:browseClose'),
+    configHosts: invoke('channels:configHosts')
   },
   secrets: {
     status: invoke('secrets:status'),

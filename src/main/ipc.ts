@@ -21,6 +21,7 @@ import { createSession } from './db/create-session'
 import { CsvSession } from './db/drivers/csv'
 import { channelId, expandHome, isAuthError, toDbError, usesPassword, type DbSession, type SessionSecrets } from './db/session'
 import { SshError } from './db/ssh'
+import { listConfigHosts } from './db/ssh-config'
 import { i18nInfo, installLanguage, languagesDir, listInstalled, loadLanguage, removeLanguage } from './i18n'
 import { buildMenu, setMenuState } from './menu'
 import { readSpread, spreadAvailable, writeXlsx } from './spread'
@@ -186,6 +187,7 @@ export function registerIpc(): void {
   })
   ipcMain.handle('channels:browseList', (_e, browseId: string, path: string) => browseList(browseId, path))
   ipcMain.handle('channels:browseClose', (_e, browseId: string) => browseClose(browseId))
+  ipcMain.handle('channels:configHosts', () => listConfigHosts())
 
   // secrets
   ipcMain.handle('secrets:status', (_e, id: string) => store.secretStatus(id))

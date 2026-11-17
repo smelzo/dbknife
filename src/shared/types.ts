@@ -50,6 +50,12 @@ export interface Channel {
   user: string
   /** Empty: ssh-agent or password. */
   keyFile: string
+  /**
+   * A host of the user's OpenSSH configuration (`~/.ssh/config`). With it `host`, `port`, `user`
+   * and `keyFile` do not count: address, user, keys and ProxyJump are read from that
+   * configuration at every connection.
+   */
+  configHost?: string
 }
 
 export interface ChannelResult {

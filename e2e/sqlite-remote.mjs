@@ -12,8 +12,12 @@
 // Without DBM_REMOTE_DB the database is built from e2e/fixture-sqlite.sql and copied to /tmp
 // of the destination, where the script removes it at the end. The helper stays in
 // ~/.cache/dbknife of the destination, as the app leaves it.
+// With the container as destination a second channel follows a host of an SSH configuration
+// file written for the test (DBM_SSH_CONFIG), which reaches the container through a ProxyJump
+// host: this machine itself, whose sshd on port 22 must let the current user in with one of
+// the default key files (~/.ssh/id_rsa, id_ed25519, …) without passphrase.
 import { execFile } from 'node:child_process'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -114,6 +118,19 @@ try {
   const appPort = target.host === '127.0.0.1' ? target.port : await tcpRelay(target.host, target.port)
   const helpersBefore = await helpers()
 
+  // the SSH configuration the app reads in place of the user's: the container behind this machine
+  const configHost = 'dbm-e2e-dest'
+  let jumpConnections = 0
+  if (container) {
+    const jumpPort = await tcpRelay('127.0.0.1', 22, () => jumpConnections++)
+    const sshConfig = join(userData, 'ssh_config')
+    writeFileSync(
+      sshConfig,
+      `Host dbm-e2e-jump\n  HostName 127.0.0.1\n  Port ${jumpPort}\nHost ${configHost}\n  HostName ${target.host}\n  Port ${target.port}\n  User ${target.user}\n  ProxyJump dbm-e2e-jump\n`
+    )
+    env.DBM_SSH_CONFIG = sshConfig
+  }
+
   session = await launch(userData)
   const { app, page, errors } = session
   await answerMessages(app)
@@ -157,13 +174,18 @@ try {
   await page.locator('#ch-user').fill(target.user)
   await page.locator('#ch-keyfile').fill(target.keyFile)
   /** OK in the channel dialog, to the end of the verification; true when the dialog has closed, which only a saved channel does. */
-  const saveChannel = async (port, passwordAsked) => {
-    await page.locator('#ch-port').fill(String(port))
+  const confirmChannel = async (passwordAsked) => {
     await page.locator('#ch-ok').click()
     if (passwordAsked) await sshPassword()
     await page.waitForFunction(() => !document.querySelector('#ch-ok')?.disabled, null, { timeout: 60000 })
     return (await page.locator('#ch-ok').count()) === 0
   }
+  const saveChannel = async (port, passwordAsked) => {
+    await page.locator('#ch-port').fill(String(port))
+    return confirmChannel(passwordAsked)
+  }
+  /** The answers of the helpers of the destination, started outside the app: one answer means one file, executable, built for that machine. */
+  const helperAnswer = () => remote(`for f in ~/.cache/dbknife/dbknife-sqlite-*; do [ -x "$f" ] && echo '{"id":1,"op":"status"}' | "$f"; done; true`)
 
   // Bug caught: a channel saved without being verified.
   const closedWithoutServer = await saveChannel(await closedPort(), false)
@@ -179,14 +201,32 @@ try {
   await remote('rm -f ~/.cache/dbknife/dbknife-sqlite-*')
   const saved = await saveChannel(appPort, !!target.password)
   const [channel] = savedChannels()
-  // started outside the app: one answer means one file, executable, built for that machine
-  const answer = await remote(`for f in ~/.cache/dbknife/dbknife-sqlite-*; do [ -x "$f" ] && echo '{"id":1,"op":"status"}' | "$f"; done; true`)
+  const answer = await helperAnswer()
   check(
     'a verified channel is saved and its helper runs on the destination',
     saved && channel?.host === '127.0.0.1' && channel.port === appPort && channel.user === target.user && /^\{.*"id":1\b.*\}$/.test(answer),
     `dialog closed: ${saved}, channels.json: ${JSON.stringify(savedChannels())}, helper: ${answer || '(none)'}, messages: ${JSON.stringify(await recordedMessages(app))}`
   )
   if (!saved) throw new Error('no channel to go on with')
+
+  if (container) {
+    // Bugs caught: the ProxyJump chain not built (the destination reached directly), the default
+    // key files not tried (the jump host names none), the password asked for the jump host or sent to it.
+    await remote('rm -f ~/.cache/dbknife/dbknife-sqlite-*')
+    await page.locator('#ce-channel-new').click()
+    await page.locator('#ch-config-host').selectOption(configHost)
+    const followed = await confirmChannel(true)
+    const viaConfig = savedChannels().find((c) => c.configHost)
+    const uploaded = await helperAnswer()
+    check(
+      'a channel following a host of the SSH configuration is saved, and reaches it through its ProxyJump host',
+      followed && viaConfig?.configHost === configHost && viaConfig.name === configHost && jumpConnections > 0 && /^\{.*"id":1\b.*\}$/.test(uploaded),
+      `dialog closed: ${followed}, channels.json: ${JSON.stringify(savedChannels())}, connections to the jump host: ${jumpConnections}, helper: ${uploaded || '(none)'}, messages: ${JSON.stringify(await recordedMessages(app))}`
+    )
+    if (!followed) await page.locator('#ch-cancel').click()
+    // the rest goes on with the first channel
+    await page.locator('#ce-channel').selectOption(channel.id)
+  }
 
   // --- the file, chosen in the tree of the destination ---------------------------------------
   if (existing) await page.locator('#ce-file').fill(file)

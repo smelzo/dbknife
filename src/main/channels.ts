@@ -7,11 +7,18 @@ import { t } from '@shared/i18n'
 import type { Channel, RemoteListing } from '@shared/types'
 import { startHelper, type HelperLink } from './db/remote/helper'
 import { expandHome, type SessionSecrets } from './db/session'
-import { connectSsh } from './db/ssh'
+import { connectSsh, connectSshChain } from './db/ssh'
+import { resolveConfigHost } from './db/ssh-config'
 import { checkHostKey } from './store'
 
-/** Opens the SSH connection of a channel; rejects with an SshError. The caller ends it. */
+/**
+ * Opens the SSH connection of a channel; rejects with an SshError. The caller ends it.
+ * A channel following a host of the OpenSSH configuration reads it again every time.
+ */
 export async function connectChannel(channel: Channel, secrets: SessionSecrets): Promise<Client> {
+  if (channel.configHost) {
+    return connectSshChain(await resolveConfigHost(channel.configHost), { password: secrets.sshPassword, passphrase: secrets.sshPassphrase }, checkHostKey)
+  }
   return connectSsh({
     host: channel.host,
     port: channel.port,

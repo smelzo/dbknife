@@ -55,10 +55,11 @@ const mssqlLogin = { user: 'dbm_test', password: 'test' }
  * someone allows it in a system prompt, which nobody answers on the e2e machine; the test
  * process itself may reach them, so the app connects to the relay instead. The host is
  * reached only when the app connects, and the relay ends with the script: it does not
- * keep the process alive.
+ * keep the process alive. `onConnection` is called at each connection relayed.
  */
-export async function tcpRelay(host, port) {
+export async function tcpRelay(host, port, onConnection) {
   const relay = createServer((client) => {
+    onConnection?.()
     const upstream = tcpConnect(port, host)
     client.pipe(upstream).pipe(client)
     client.on('error', () => upstream.destroy())

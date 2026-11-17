@@ -83,6 +83,8 @@ export interface Api {
     /** The entries of a folder; an empty path is the home folder. */
     browseList(browseId: string, path: string): Promise<RemoteListing>
     browseClose(browseId: string): Promise<void>
+    /** The hosts named in the user's and the system's OpenSSH configuration, which a channel can follow (`Channel.configHost`). */
+    configHosts(): Promise<string[]>
   }
   secrets: {
     status(id: string): Promise<Record<SecretKind, boolean>>

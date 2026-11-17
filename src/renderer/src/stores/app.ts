@@ -88,10 +88,19 @@ const secretPrompts = {
 
 type SecretNeed = keyof typeof secretPrompts
 
-/** What the prompt for a secret names: the service it opens and the user it belongs to. */
-type SecretOwner = { service: string; user: string }
+/**
+ * What the prompt for a secret names: the service it opens and the user it belongs to, or
+ * the host of the SSH configuration a channel follows, whose user is written there.
+ */
+type SecretOwner = { service: string; user: string } | { configHost: string }
 
-const sshOwner = (ssh: { user: string; host: string }): SecretOwner => ({ service: `${ssh.user}@${ssh.host}`, user: ssh.user })
+const sshOwner = (ssh: { user: string; host: string; configHost?: string }): SecretOwner =>
+  ssh.configHost ? { configHost: ssh.configHost } : { service: `${ssh.user}@${ssh.host}`, user: ssh.user }
+
+function promptMessage(needs: SecretNeed, owner: SecretOwner): string {
+  if (!('configHost' in owner)) return t(secretPrompts[needs].message, owner)
+  return t(needs === 'sshPassphrase' ? 'app.credentials.keyPassphraseConfigMessage' : 'app.credentials.sshPasswordConfigMessage', { host: owner.configHost })
+}
 
 /**
  * Asks for the missing secrets until the attempt succeeds or the user gives up (undefined).
@@ -109,7 +118,7 @@ async function askSecrets<R extends { ok: boolean; needs?: SecretNeed; error?: D
     const p = secretPrompts[r.needs]
     const error = r.error?.message && r.error.message !== previousError ? r.error.message : ''
     previousError = r.error?.message ?? ''
-    const message = t(p.message, owner(r.needs))
+    const message = promptMessage(r.needs, owner(r.needs))
     const values = await prompt({
       title: t(p.title),
       message: error ? `${error}\n\n${message}` : message,

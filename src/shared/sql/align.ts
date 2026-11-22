@@ -22,7 +22,7 @@ export interface ColumnShape {
   collation: string | null // COLLATION_NAME
   generation: string | null // GENERATION_EXPRESSION: '' (MySQL) or NULL (MariaDB) when not generated
   comment: string // COLUMN_COMMENT
-  srsId?: number | null // SRS_ID, MySQL only
+  srsId: number | null // SRS_ID on MySQL; null on MariaDB, which has none
 }
 
 /** One row of information_schema.STATISTICS (one per column of an index). */

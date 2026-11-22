@@ -1,7 +1,9 @@
 import { ipcMain } from 'electron'
-import { t } from '@shared/i18n'
-import type { CopyOptions, CopySchemaRef, DumpOptions, Engine, ImportOptions, MssqlBackupOptions, MssqlRestoreOptions } from '@shared/types'
+import { t, type MessageKey } from '@shared/i18n'
+import type { AlignRequest, CopyOptions, CopySchemaRef, DumpOptions, Engine, ImportOptions, MssqlBackupOptions, MssqlRestoreOptions } from '@shared/types'
 import type { DbSession } from '../db/session'
+import { recordAlignmentRun } from '../store'
+import { alignApply, alignCompare, NeedsConfirmation } from './align-mysql'
 import { copyDatabase, copyPreview } from './copy-mysql'
 import { jobs, startJob, type ToolSet } from './jobs'
 import { mssqlTools } from './mssql'
@@ -20,9 +22,9 @@ export function registerToolHandlers(getAnySession: (id: string) => DbSession): 
     if (engine === 'sqlite') throw new Error(t('tools.sqliteUnavailable'))
     return [session, toolSets[engine]]
   }
-  const getMysql = (id: string): DbSession => {
+  const getMysql = (id: string, unsupported: MessageKey = 'tools.copy.unsupported'): DbSession => {
     const session = getAnySession(id)
-    if (session.config.engine !== 'mysql') throw new Error(t('tools.copy.unsupported'))
+    if (session.config.engine !== 'mysql') throw new Error(t(unsupported))
     return session
   }
   const getMssql = (id: string): DbSession => {
@@ -49,6 +51,29 @@ export function registerToolHandlers(getAnySession: (id: string) => DbSession): 
     const source = getMysql(sessionId)
     const target = options.target.kind === 'connection' ? getMysql(options.target.sessionId) : undefined
     return startJob(e.sender, (job) => copyDatabase(job, source, options, target))
+  })
+  ipcMain.handle('tools:alignCompare', (e, r: AlignRequest) => {
+    const source = getMysql(r.source.sessionId, 'tools.align.unsupported')
+    const target = getMysql(r.target.sessionId, 'tools.align.unsupported')
+    return startJob(e.sender, (job) => alignCompare(job, source, target, r))
+  })
+  ipcMain.handle('tools:alignApply', (e, r: AlignRequest) => {
+    const source = getMysql(r.source.sessionId, 'tools.align.unsupported')
+    const target = getMysql(r.target.sessionId, 'tools.align.unsupported')
+    return startJob(e.sender, async (job) => {
+      // a saved alignment records every run, failed ones included; a stop for confirmation is not a run
+      const record = (ok: boolean, message: string): void => {
+        if (r.alignmentId) recordAlignmentRun(r.alignmentId, { at: Date.now(), via: 'app', ok, message })
+      }
+      try {
+        const message = await alignApply(job, source, target, r)
+        record(true, message)
+        return message
+      } catch (err) {
+        if (!(err instanceof NeedsConfirmation)) record(false, job.cancelled ? (job.cancelledMessage ?? t('tools.cancelled')) : (err as Error).message)
+        throw err
+      }
+    })
   })
   ipcMain.handle('tools:mssqlBackup', (e, sessionId: string, options: MssqlBackupOptions) => {
     const session = getMssql(sessionId)

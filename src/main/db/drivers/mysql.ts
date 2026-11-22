@@ -254,6 +254,62 @@ export class MysqlSession extends ServerSession<Connection> {
     })
   }
 
+  private auxId?: number
+
+  /** CONNECTION_ID() of the auxiliary connection, read once: for KILL QUERY from the user connection (pinned sessions). */
+  async auxThreadId(): Promise<number> {
+    if (this.auxId === undefined) {
+      const [row] = await this.exec<Row[]>(await this.auxConnection(), 'SELECT CONNECTION_ID() AS id')
+      this.auxId = Number(row.id)
+    }
+    return this.auxId
+  }
+
+  /**
+   * Streams the rows of a query on the auxiliary connection to `onRows`, `batch` at a time: reading pauses
+   * until `onRows` has finished with a block. An error of `onRows` stops the query by destroying the
+   * connection (meant for job sessions) and is thrown.
+   */
+  async queryStream(sql: string, params: unknown[] | undefined, onRows: (rows: Row[]) => Promise<void>, batch = 500): Promise<void> {
+    const conn = await this.auxConnection()
+    await new Promise<void>((resolve, reject) => {
+      let rows: Row[] = []
+      let chain = Promise.resolve()
+      let failed = false
+      const fail = (err: unknown): void => {
+        if (failed) return
+        failed = true
+        this.destroy(conn)
+        reject(err)
+      }
+      const flush = (): void => {
+        const block = rows
+        rows = []
+        conn.pause()
+        chain = chain.then(() => onRows(block)).then(() => {
+          if (!failed) conn.resume()
+        })
+        chain.catch(fail)
+      }
+      const query = conn.query({ sql, values: params })
+      query.on('result', (row: unknown) => {
+        if (failed) return
+        rows.push(row as Row)
+        if (rows.length >= batch) flush()
+      })
+      query.on('error', (err: unknown) => {
+        if (failed) return
+        failed = true
+        reject(err)
+      })
+      query.on('end', () => {
+        if (failed) return
+        if (rows.length) flush()
+        chain.then(() => !failed && resolve(), fail)
+      })
+    })
+  }
+
   /** Kills the running statement through a short-lived extra connection. */
   async cancel(): Promise<void> {
     const conn = await this.connect()

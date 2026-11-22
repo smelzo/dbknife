@@ -15,7 +15,7 @@ import { dumpArgs, requireTool, runWith, withDefaults, withOptionFile } from './
 // appending its output to a script file).
 
 /** TABLE_TYPE of information_schema.TABLES → the kind copied; other types are left out. */
-const relationKinds: Record<string, CopyKind | undefined> = { 'BASE TABLE': 'table', VIEW: 'view', SEQUENCE: 'sequence' }
+export const relationKinds: Record<string, CopyKind | undefined> = { 'BASE TABLE': 'table', VIEW: 'view', SEQUENCE: 'sequence' }
 
 /** Column of the SHOW CREATE … result holding the definition (MariaDB's SHOW CREATE SEQUENCE uses Create Table). */
 const definitionColumns: Record<CopyKind, string> = {
@@ -40,7 +40,7 @@ UNION SELECT COLLATION_CONNECTION FROM information_schema.TRIGGERS WHERE TRIGGER
 UNION SELECT DATABASE_COLLATION FROM information_schema.EVENTS WHERE EVENT_SCHEMA IN (?)
 UNION SELECT COLLATION_CONNECTION FROM information_schema.EVENTS WHERE EVENT_SCHEMA IN (?)`
 
-async function select(session: DbSession, sql: string, params?: unknown[]): Promise<Row[]> {
+export async function select(session: DbSession, sql: string, params?: unknown[]): Promise<Row[]> {
   const r = await session.query(sql, params)
   if (r.error) throw new Error(r.error.message)
   return r.rows
@@ -52,7 +52,7 @@ const text = (v: unknown): string | undefined => (v === null || v === undefined 
  * The server's collations. COLLATIONS lists MariaDB 10.10+'s UCA 14 collations without their
  * character set (`uca1400_ai_ci`), so they are read with their full names from the applicability table.
  */
-async function collations(session: DbSession): Promise<CopyPreview['available']> {
+export async function collations(session: DbSession): Promise<CopyPreview['available']> {
   const rows = await select(
     session,
     'SELECT a.*, cs.DEFAULT_COLLATE_NAME AS default_collation FROM information_schema.COLLATION_CHARACTER_SET_APPLICABILITY a JOIN information_schema.CHARACTER_SETS cs USING (CHARACTER_SET_NAME)'
@@ -108,7 +108,7 @@ async function checkTarget(reader: DbSession, writer: DbSession, o: CopyOptions)
   if (o.existing === 'stop' && preview.existing.length) throw new Error(t('tools.copy.targetExists', { schemas: preview.existing.join(', ') }))
 }
 
-async function readObject(session: DbSession, schema: string, kind: CopyKind, name: string): Promise<SourceObject> {
+export async function readObject(session: DbSession, schema: string, kind: CopyKind, name: string): Promise<SourceObject> {
   const [row] = await select(session, `SHOW CREATE ${kind.toUpperCase()} ${quoteIdentifier(name)}`)
   // NULL when the user may not see the body (not the definer and no SHOW_ROUTINE / SELECT privilege)
   const ddl = text(row?.[definitionColumns[kind]])
@@ -162,7 +162,7 @@ async function readSchema(job: Job, session: DbSession, schema: string, o: CopyO
 }
 
 /** Relations already in the target schemas, `schema.name` → kind, so recreating drops them with the right statement. */
-async function targetKinds(session: DbSession, schemas: string[]): Promise<Record<string, CopyKind>> {
+export async function targetKinds(session: DbSession, schemas: string[]): Promise<Record<string, CopyKind>> {
   const rows = await select(session, 'SELECT TABLE_SCHEMA AS s, TABLE_NAME AS name, TABLE_TYPE AS type FROM information_schema.TABLES WHERE TABLE_SCHEMA IN (?)', [schemas])
   const kinds: Record<string, CopyKind> = {}
   for (const r of rows) {
@@ -172,7 +172,7 @@ async function targetKinds(session: DbSession, schemas: string[]): Promise<Recor
   return kinds
 }
 
-function warningText(w: PlanWarning): string {
+export function warningText(w: PlanWarning): string {
   switch (w.code) {
     case 'qualifiedReference':
       return t('tools.copy.warning.qualifiedReference', { object: w.object })
@@ -184,7 +184,7 @@ function warningText(w: PlanWarning): string {
 }
 
 /** Plan steps as script text; compound bodies hold `;`, so they go between DELIMITER ;; and DELIMITER ;. */
-const script = (steps: PlanStep[]): string =>
+export const script = (steps: PlanStep[]): string =>
   steps.map((s) => (s.compound ? `DELIMITER ;;\n${s.sql} ;;\nDELIMITER ;\n\n` : `${s.sql};\n\n`)).join('')
 
 export async function copyDatabase(job: Job, source: DbSession, o: CopyOptions, target?: DbSession): Promise<string> {

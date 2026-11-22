@@ -33,7 +33,8 @@ const columns = (rows: Col[]): ColumnShape[] =>
     extra,
     collation,
     generation,
-    comment: ''
+    comment: '',
+    srsId: null
   }))
 
 const indexes = (expression: boolean): IndexPart[] =>

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { t } from '@shared/i18n'
 import { dialectFor } from '@shared/sql/dialect'
 import { violatesSafeUpdates } from '@shared/sql/safe-updates'
 import type { ConnectionConfig, DbError, ExecOptions, ExecResult, QueryResult, Row, ServerInfo } from '@shared/types'
@@ -28,6 +29,11 @@ export abstract class ServerSession<C> implements DbSession {
   protected autocommit = true
   /** The server enforces Safe Updates itself (set by initUser), so the client does not check statements. */
   protected readonly serverSafeUpdates: boolean = false
+  /**
+   * The auxiliary connection is not reopened once lost: a job holding a transaction or session settings
+   * there fails instead of going on, without them, on a new connection.
+   */
+  pinned = false
 
   constructor(
     readonly config: ConnectionConfig,
@@ -106,7 +112,8 @@ export abstract class ServerSession<C> implements DbSession {
     return { conn: this.user, reconnected: true }
   }
 
-  private async auxConnection(): Promise<C> {
+  protected async auxConnection(): Promise<C> {
+    if (this.aux && !this.isAlive(this.aux) && this.pinned) throw new Error(t('main.session.connectionLost'))
     if (!this.aux || !this.isAlive(this.aux)) this.aux = await this.connect()
     return this.aux
   }

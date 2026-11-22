@@ -7,7 +7,7 @@ import { alertError } from '@/dialogs'
 import { t } from '@/i18n'
 import { environmentLabel } from '@/stores/app'
 import { alignConnection, alignConnections, alignSide, chooseSide, closeSide, defaultAlignOptions, saveNewAlignment, type AlignSide, type AlignmentFields } from './align-sessions'
-import { actionLabels, kindLabels, noteText, runAlignment, statusLabels } from './align-run'
+import { actionLabels, kindLabels, noteText, recreatesTable, runAlignment, statusLabels } from './align-run'
 import { useToolJob } from './tool-job'
 
 /**
@@ -212,17 +212,21 @@ async function save(): Promise<void> {
 async function apply(): Promise<void> {
   if (!canApply.value) return
   const seen = preview.value!.objects
+  const recreated = seen.filter((o) => o.action === 'recreate' && isChecked(o))
+  // the comparison ran without drops: a checked object only in the target is dropped when Structure is chosen
+  const dropped = seen.filter((o) => o.status === 'targetOnly' && isChecked(o))
   const r: AlignRequest = {
     ...request(objects.value, drop.value),
-    // what the user saw in the comparison and chose
+    // confirmed by the question of runAlignment, asked before the job starts
     confirmed: {
-      recreate: seen.filter((o) => o.action === 'recreate' && isChecked(o)).map((o) => ({ kind: o.kind, name: o.name })),
-      drop: seen.filter((o) => o.status === 'targetOnly' && isChecked(o)).map((o) => ({ kind: o.kind, name: o.name }))
+      recreate: recreated.map((o) => ({ kind: o.kind, name: o.name })),
+      drop: dropped.map((o) => ({ kind: o.kind, name: o.name }))
     },
     alignmentId: savedId.value
   }
+  const ask = { recreate: recreated.filter(recreatesTable), drop: options.structure ? dropped : [] }
   shown.value = 'apply'
-  const end = await runAlignment(props.ws, r, target.connectionId, applyTool)
+  const end = await runAlignment(props.ws, r, target.connectionId, applyTool, ask)
   // the target changed: the comparison no longer describes it
   if (end && !end.error) comparedBasis.value = ''
 }

@@ -75,13 +75,15 @@ const sameRef = (a: AlignObjectRef, b: AlignObjectRef): boolean => a.kind === b.
 const ref = (o: AlignObjectDiff): AlignObjectRef => ({ kind: o.kind, name: o.name })
 
 /** A recreation that loses rows: the table recreated, or what replaces a table of the target (as isTableChange of the main). */
-const recreatesTable = (o: AlignObjectDiff): boolean =>
+export const recreatesTable = (o: AlignObjectDiff): boolean =>
   o.action === 'recreate' && (o.kind === 'table' || o.notes.some((n) => n.code === 'kindDiffers' && n.params?.target === 'table'))
 
-interface Changes {
+/** Recreations of tables and drops: what deletes rows with an implicit commit. */
+export interface AlignChanges {
   recreate: AlignObjectDiff[]
   drop: AlignObjectDiff[]
 }
+type Changes = AlignChanges
 
 /** The table recreations and the drops of the preview, named as the main names them. */
 const destructive = (preview: AlignPreview | undefined): Changes => ({
@@ -98,7 +100,7 @@ function toAsk(all: Changes, r: AlignRequest): Changes {
   return fresh.recreate.length || fresh.drop.length ? fresh : all
 }
 
-/** The question of what the job stopped for: the tables losing their rows, with or without a backup, and the objects dropped. */
+/** The question about destructive changes: the tables losing their rows, with or without a backup, and the objects dropped. */
 function confirmChanges(r: AlignRequest, pending: Changes): Promise<boolean> {
   const lines = [
     ...pending.recreate.map((o) =>
@@ -112,16 +114,25 @@ function confirmChanges(r: AlignRequest, pending: Changes): Promise<boolean> {
 }
 
 /**
- * Applies `request` with `tool`: confirmation for a production target, then
- * the job; a stop for recreations or drops not confirmed asks about them and,
- * with a yes, runs again with them confirmed. Resolves with the last job's end.
+ * Applies `request` with `tool`: confirmation for a production target, then of
+ * `ask` (the changes of a comparison that `request.confirmed` holds), then the
+ * job; a stop for recreations or drops not confirmed asks about them and, with
+ * a yes, runs again with them confirmed. Resolves with the last job's end,
+ * undefined when nothing ran to its end.
  */
-export async function runAlignment(ws: Workspace, request: AlignRequest, targetConnectionId: string, tool: ToolJob): Promise<ToolProgress | undefined> {
+export async function runAlignment(
+  ws: Workspace,
+  request: AlignRequest,
+  targetConnectionId: string,
+  tool: ToolJob,
+  ask?: AlignChanges
+): Promise<ToolProgress | undefined> {
   const target = alignConnection(ws, targetConnectionId)
   if (target?.environment === 'production') {
     const ok = await confirm(t('admin.align.productionConfirm', { name: target.name, schema: request.target.schema }), undefined, t('admin.align.apply'))
     if (!ok) return undefined
   }
+  if (ask && (ask.recreate.length || ask.drop.length) && !(await confirmChanges(request, ask))) return undefined
   let r = request
   let end: ToolProgress | undefined
   for (;;) {

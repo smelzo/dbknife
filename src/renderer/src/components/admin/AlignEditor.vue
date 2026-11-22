@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { ArrowRight, X } from 'lucide-vue-next'
 import type { AlignObjectDiff, AlignObjectRef, AlignOptions, AlignRequest, Alignment } from '@shared/types'
 import type { Workspace } from '@/workspace/workspace'
-import { promptText } from '@/dialogs'
+import { alertError, promptText } from '@/dialogs'
 import { t } from '@/i18n'
 import { environmentLabel, useApp } from '@/stores/app'
 import { alignConnection, openSessionFor, type AlignSession } from './align-sessions'
@@ -20,8 +20,7 @@ const props = defineProps<{ ws: Workspace; draft: Partial<Alignment>; compare?: 
 const emit = defineEmits<{ saved: [alignment: Alignment]; close: [] }>()
 const app = useApp()
 
-const systemSchemas = "('information_schema', 'mysql', 'performance_schema', 'sys')"
-const schemataSql = `SELECT SCHEMA_NAME AS s FROM information_schema.SCHEMATA WHERE SCHEMA_NAME NOT IN ${systemSchemas} ORDER BY SCHEMA_NAME`
+const schemataSql = 'SELECT SCHEMA_NAME AS s FROM information_schema.SCHEMATA ORDER BY SCHEMA_NAME'
 
 /** The workspace's connection first, then the other MySQL/MariaDB ones. */
 const connections = computed(() => [props.ws.config, ...app.connections.filter((c) => c.engine === 'mysql' && c.id !== props.ws.config.id)])
@@ -61,7 +60,8 @@ async function choose(end: End, connectionId: string): Promise<void> {
   end.session = s
   const r = await window.api.db.query(s.sessionId, schemataSql)
   if (n !== end.opening) return
-  end.schemas = r.error ? [] : r.rows.map((x) => String(x.s))
+  if (r.error) await alertError(t('admin.align.schemasFailed', { name: configOf(end)?.name ?? '' }), r.error.message)
+  end.schemas = r.error ? [] : r.rows.map((x) => String(x.s)).filter((x) => !props.ws.dialect.isSystemSchema(x))
   if (!end.schemas.includes(end.schema)) end.schema = ''
 }
 
@@ -221,6 +221,14 @@ async function save(): Promise<void> {
     if (!typed?.trim()) return
     name = typed.trim()
   }
+  try {
+    await write(name)
+  } catch (err) {
+    await alertError(t('admin.align.saveFailed', { name }), (err as Error).message)
+  }
+}
+
+async function write(name: string): Promise<void> {
   // the runs recorded by the main since the editor opened are kept
   const stored = savedId.value ? (await window.api.alignments.list()).find((a) => a.id === savedId.value) : undefined
   const alignment: Alignment = {
@@ -252,7 +260,9 @@ async function apply(): Promise<void> {
     alignmentId: savedId.value
   }
   shown.value = 'apply'
-  await runAlignment(props.ws, r, target.connectionId, applyTool)
+  const end = await runAlignment(props.ws, r, target.connectionId, applyTool)
+  // the target changed: the comparison no longer describes it
+  if (end && !end.error) comparedBasis.value = ''
 }
 
 function cancel(): void {
@@ -283,7 +293,7 @@ onUnmounted(() => {
     <div class="page-header">
       {{ savedName || t('admin.align.newAlignment') }}
       <span class="spacer" />
-      <button class="icon-btn" :title="t('admin.align.backToList')" :aria-label="t('admin.align.backToList')" @click="emit('close')"><X :size="14" /></button>
+      <button class="icon-btn" :title="t('admin.align.backToList')" :aria-label="t('admin.align.backToList')" :disabled="busy" @click="emit('close')"><X :size="14" /></button>
     </div>
 
     <div class="bar">

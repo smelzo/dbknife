@@ -22,9 +22,14 @@ export function useToolJob(onDone?: (p: ToolProgress) => void) {
       finish = undefined
     }
   })
-  onUnmounted(off)
+  // a caller awaiting start() goes on when the page closes; the job itself continues in the main
+  onUnmounted(() => {
+    off()
+    finish?.(undefined)
+    finish = undefined
+  })
 
-  /** Starts a job; resolves with its last event when it ends, undefined when it could not start. */
+  /** Starts a job; resolves with its last event when it ends, undefined when it could not start or the page closed. */
   async function start(launch: () => Promise<string>): Promise<ToolProgress | undefined> {
     Object.assign(job, { running: true, progress: 0, message: t('admin.job.starting'), log: '', error: '', preview: undefined })
     const ended = new Promise<ToolProgress | undefined>((resolve) => (finish = resolve))

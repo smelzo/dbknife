@@ -495,6 +495,8 @@ export interface ToolProgress {
   log?: string
   done?: boolean
   error?: string
+  /** Code of the error, when the job tells it apart (alignment: 'needsConfirmation'). */
+  errorCode?: string
   /** Alignment: the comparison, also when the job stops for a confirmation. */
   preview?: AlignPreview
 }

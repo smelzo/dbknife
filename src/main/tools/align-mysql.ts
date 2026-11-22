@@ -46,7 +46,10 @@ import { checkCancelled, report, type Job } from './jobs'
 // .claude/docs/piano-allineamento.md, "Regole dell'allineamento" and Task 3.
 
 /** The job stopped before any change because recreations or drops were not confirmed (not a run of the alignment). */
-export class NeedsConfirmation extends Error {}
+export class NeedsConfirmation extends Error {
+  /** ToolProgress.errorCode of the job: the renderer asks for the confirmation. */
+  readonly code = 'needsConfirmation'
+}
 
 /** SHOW CREATE TABLE leaves options out with these modes (MariaDB), so two different tables could read alike. */
 const hidingModes = new Set(['NO_TABLE_OPTIONS', 'NO_KEY_OPTIONS', 'NO_FIELD_OPTIONS'])

@@ -34,7 +34,11 @@ const logEl = ref<HTMLElement>()
 let runSessions: AlignSession[] = []
 
 async function reload(): Promise<void> {
-  alignments.value = await window.api.alignments.list()
+  try {
+    alignments.value = await window.api.alignments.list()
+  } catch (err) {
+    await alertError(t('admin.align.listFailed'), (err as Error).message)
+  }
   if (!selected.value) selectedId.value = alignments.value[0]?.id ?? ''
 }
 
@@ -59,15 +63,23 @@ async function closeEditor(): Promise<void> {
 
 async function duplicate(a: Alignment): Promise<void> {
   const copy: Alignment = { ...(JSON.parse(JSON.stringify(a)) as Alignment), id: crypto.randomUUID(), name: t('admin.align.copyName', { name: a.name }), runs: [] }
-  await window.api.alignments.save(copy)
-  selectedId.value = copy.id
+  try {
+    await window.api.alignments.save(copy)
+    selectedId.value = copy.id
+  } catch (err) {
+    await alertError(t('admin.align.saveFailed', { name: copy.name }), (err as Error).message)
+  }
   await reload()
 }
 
 async function remove(a: Alignment): Promise<void> {
   if (!(await confirm(t('admin.align.deleteConfirm', { name: a.name }), undefined, t('common.delete')))) return
-  await window.api.alignments.remove(a.id)
-  if (selectedId.value === a.id) selectedId.value = ''
+  try {
+    await window.api.alignments.remove(a.id)
+    if (selectedId.value === a.id) selectedId.value = ''
+  } catch (err) {
+    await alertError(t('admin.align.deleteFailed', { name: a.name }), (err as Error).message)
+  }
   await reload()
 }
 
@@ -161,9 +173,9 @@ onUnmounted(closeRunSessions)
         <div class="row">
           <span class="title">{{ selected.name }}</span>
           <span class="spacer" />
-          <button @click="edit(selected)">{{ t('admin.align.edit') }}</button>
-          <button @click="duplicate(selected)">{{ t('admin.align.duplicate') }}</button>
-          <button class="danger" @click="remove(selected)">{{ t('common.delete') }}</button>
+          <button :disabled="job.running" @click="edit(selected)">{{ t('admin.align.edit') }}</button>
+          <button :disabled="job.running" @click="duplicate(selected)">{{ t('admin.align.duplicate') }}</button>
+          <button class="danger" :disabled="job.running" @click="remove(selected)">{{ t('common.delete') }}</button>
         </div>
 
         <div class="route">
@@ -191,7 +203,7 @@ onUnmounted(closeRunSessions)
             <span v-if="selected.options.data" class="pill">{{ t('admin.align.data') }}</span>
             <span v-if="selected.options.data && selected.options.deleteRows" class="pill">{{ t('admin.align.deleteRows') }}</span>
             <span v-if="selected.options.backup" class="pill">{{ t('admin.align.backup') }}</span>
-            <span class="pill">{{ t(selected.options.definers === 'keep' ? 'admin.copy.keepDefiners' : 'admin.copy.removeDefiners') }}</span>
+            <span class="pill">{{ t(selected.options.definers === 'keep' ? 'admin.align.definersKeep' : 'admin.align.definersRemove') }}</span>
           </div>
         </section>
 

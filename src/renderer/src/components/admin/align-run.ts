@@ -66,7 +66,7 @@ export function noteText(n: AlignNote): string {
   if (!key) return n.code
   // kinds arrive as AlignKind codes
   if (n.code === 'kindDiffers' || n.code === 'missing' || n.code === 'notTargetOnly') {
-    for (const p of kindParams) if (params[p] && params[p] in kindLabels) params[p] = t(kindLabels[params[p] as AlignKind])
+    for (const p of kindParams) if (params[p] && Object.hasOwn(kindLabels, params[p])) params[p] = t(kindLabels[params[p] as AlignKind])
   }
   return t(key, params)
 }
@@ -78,17 +78,28 @@ const ref = (o: AlignObjectDiff): AlignObjectRef => ({ kind: o.kind, name: o.nam
 const recreatesTable = (o: AlignObjectDiff): boolean =>
   o.action === 'recreate' && (o.kind === 'table' || o.notes.some((n) => n.code === 'kindDiffers' && n.params?.target === 'table'))
 
-/** The table recreations and the drops of the preview that the request did not confirm. */
-function unconfirmed(preview: AlignPreview | undefined, r: AlignRequest): { recreate: AlignObjectDiff[]; drop: AlignObjectDiff[] } {
-  const objects = preview?.objects ?? []
-  return {
-    recreate: objects.filter((o) => recreatesTable(o) && !(r.confirmed?.recreate ?? []).some((c) => sameRef(c, o))),
-    drop: objects.filter((o) => o.action === 'drop' && !(r.confirmed?.drop ?? []).some((c) => sameRef(c, o)))
+interface Changes {
+  recreate: AlignObjectDiff[]
+  drop: AlignObjectDiff[]
+}
+
+/** The table recreations and the drops of the preview, named as the main names them. */
+const destructive = (preview: AlignPreview | undefined): Changes => ({
+  recreate: (preview?.objects ?? []).filter(recreatesTable),
+  drop: (preview?.objects ?? []).filter((o) => o.action === 'drop')
+})
+
+/** Those the request did not confirm yet, to ask about; all of them when the names do not tell (lower_case_table_names). */
+function toAsk(all: Changes, r: AlignRequest): Changes {
+  const fresh = {
+    recreate: all.recreate.filter((o) => !(r.confirmed?.recreate ?? []).some((c) => sameRef(c, o))),
+    drop: all.drop.filter((o) => !(r.confirmed?.drop ?? []).some((c) => sameRef(c, o)))
   }
+  return fresh.recreate.length || fresh.drop.length ? fresh : all
 }
 
 /** The question of what the job stopped for: the tables losing their rows, with or without a backup, and the objects dropped. */
-function confirmChanges(r: AlignRequest, pending: { recreate: AlignObjectDiff[]; drop: AlignObjectDiff[] }): Promise<boolean> {
+function confirmChanges(r: AlignRequest, pending: Changes): Promise<boolean> {
   const lines = [
     ...pending.recreate.map((o) =>
       o.rows ? t('admin.align.confirm.recreateRows', { name: o.name, target: o.rows.delete, source: o.rows.insert }) : t('admin.align.confirm.recreate', { name: o.name })
@@ -115,18 +126,15 @@ export async function runAlignment(ws: Workspace, request: AlignRequest, targetC
   let end: ToolProgress | undefined
   for (;;) {
     end = await tool.start(() => window.api.tools.alignApply(r))
-    if (!end?.error) break
-    // the main refuses unconfirmed changes before any other check that can fail with this preview
-    const pending = unconfirmed(tool.job.preview, r)
-    if (!pending.recreate.length && !pending.drop.length) break
-    if (!(await confirmChanges(r, pending))) break
-    r = {
-      ...r,
-      confirmed: {
-        recreate: [...(r.confirmed?.recreate ?? []), ...pending.recreate.map(ref)],
-        drop: [...(r.confirmed?.drop ?? []), ...pending.drop.map(ref)]
-      }
+    if (end?.errorCode !== 'needsConfirmation') break
+    // the job stopped before any change, with the preview of what it would do
+    const all = destructive(tool.job.preview)
+    if (!(await confirmChanges(r, toAsk(all, r)))) {
+      ws.log('info', t('workspace.admin.align'), t('tools.cancelled'))
+      end = undefined
+      break
     }
+    r = { ...r, confirmed: { recreate: all.recreate.map(ref), drop: all.drop.map(ref) } }
   }
   if (end) ws.log(end.error ? 'error' : 'ok', t('workspace.admin.align'), end.error ?? end.message ?? '')
   if (targetConnectionId === ws.config.id) ws.refreshAfterDdl()

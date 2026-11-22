@@ -57,13 +57,18 @@ export async function runCli(): Promise<number> {
     else err(message)
     return ok ? 0 : 1
   }
-  // Ctrl-C or a cron timeout: Electron turns SIGINT/SIGTERM into a quit (Node's signal handlers are not called);
-  // the quit waits for the job, which the engine cancels putting back what it changed
+  // Ctrl-C or a cron timeout: Electron turns the first SIGINT/SIGTERM/SIGHUP into a quit (Node's handlers are not
+  // called) and puts back the default action, so a second signal would kill the process while the engine puts back
+  // what it changed: the quit waits for the job, cancelled, and later signals are ignored
   let stopped = false
   let jobId = ''
   const stop = (e: Electron.Event): void => {
     e.preventDefault()
-    stopped = true
+    if (!stopped) {
+      stopped = true
+      err(t('cli.cancelling'))
+      for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.on(signal, () => undefined)
+    }
     cancelJob(jobId)
   }
   app.on('before-quit', stop)

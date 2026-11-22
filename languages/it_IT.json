@@ -751,6 +751,7 @@
     "channel.verifyFailed": "Impossibile verificare il canale \"{name}\"",
     "channel.verifying": "Verifica in corso…",
     "cli.ambiguous": "{count} allineamenti si chiamano {name}: rinominali in DBKnife",
+    "cli.cancelling": "Annullamento in corso, rimetto com'era quanto modificato: attendi",
     "cli.needsConfirmation": "Queste tabelle vanno ricreate, perdendo le loro righe: {tables}. Nessuna modifica. Esegui l'allineamento una volta da DBKnife per confermare",
     "cli.notFound": "Nessun allineamento salvato si chiama {name}",
     "cli.passwordMissing": "Nessuna password salvata per {name}: apri la connessione in DBKnife una volta e salvane la password",

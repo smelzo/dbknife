@@ -754,6 +754,7 @@
     "channel.verifyFailed": "The channel \"{name}\" could not be verified",
     "channel.verifying": "Verifying…",
     "cli.ambiguous": "{count} alignments are named {name}: rename them in DBKnife",
+    "cli.cancelling": "Cancelling, putting back what was changed: wait",
     "cli.needsConfirmation": "These tables must be recreated, which loses their rows: {tables}. Nothing was changed. Run the alignment once from DBKnife to confirm",
     "cli.notFound": "No saved alignment is named {name}",
     "cli.passwordMissing": "No saved password for {name}: open the connection in DBKnife once and save its password",

@@ -896,9 +896,16 @@ async function takeInventory(ctx: Context, items: Item[], inv: Inventory): Promi
     // with the kinds as they are now: the script drops a view or a table with the right statement
     await writeRecoveryFile(ctx, inv, inv.saved, await targetKinds(writer.session, [writer.schema]))
   } catch (err) {
-    await dropBackups(ctx, inv, writer.session)
+    // no KILL from now on, and the ones sent have reached the server before the backups are dropped
+    job.cancelers.clear()
+    await Promise.allSettled(ctx.kills)
+    const left = await dropBackups(ctx, inv, writer.session)
     await rm(inv.file, { force: true })
-    throw err
+    if (!left.length) throw err
+    const error = job.cancelled ? t('tools.cancelled') : (err as Error).message
+    const message = t('tools.align.backupsLeft', { error, tables: left.join(', ') })
+    if (job.cancelled) job.cancelledMessage = message
+    throw new Error(message)
   }
 }
 
@@ -1129,7 +1136,8 @@ async function afterFailure(ctx: Context, target: DbSession, inv: Inventory, st:
   }
 
   let session: DbSession | undefined = writer.session
-  if (st.inTransaction && !st.committing) {
+  // also after a COMMIT that failed: the recovery's DDL would commit a transaction left open
+  if (st.inTransaction) {
     try {
       await exec(session, 'ROLLBACK')
     } catch {

@@ -1584,6 +1584,7 @@
     "tableEditor.validate.noColumns": "The table needs at least one column.",
     "tableEditor.validate.noName": "The table needs a name.",
     "tools.align.backup": "Backing up {object}",
+    "tools.align.backupsLeft": "{error}. Nothing else was changed, but these backup tables could not be dropped: {tables}",
     "tools.align.busy": "Another alignment is running on {schema}: try again when it has finished",
     "tools.align.checkingOrphans": "Checking the foreign keys",
     "tools.align.commitUnknown": "{error}. The connection was lost during the COMMIT, so it is not known whether the rows were written: nothing was put back, and the recovery script {file} and the dbm_al_ backup tables are kept",

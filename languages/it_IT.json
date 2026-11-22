@@ -1608,6 +1608,7 @@
     "tableEditor.validate.noColumns": "La tabella deve avere almeno una colonna.",
     "tableEditor.validate.noName": "La tabella deve avere un nome.",
     "tools.align.backup": "Copia di sicurezza di {object}",
+    "tools.align.backupsLeft": "{error}. Non è stato modificato nient'altro, ma queste tabelle di backup non si sono potute eliminare: {tables}",
     "tools.align.busy": "Un altro allineamento è in corso su {schema}: riprova quando è finito",
     "tools.align.checkingOrphans": "Controllo delle chiavi esterne",
     "tools.align.commitUnknown": "{error}. La connessione si è interrotta durante il COMMIT, quindi non si sa se le righe sono state scritte: non è stato ripristinato niente, e restano lo script di recupero {file} e le tabelle di backup dbm_al_",

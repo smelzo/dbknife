@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { agentDateTime } from '@shared/sql/mssql-backup'
 import type { MessageKey } from '@shared/i18n'
 import type { Row } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import type { Workspace } from '@/workspace/workspace'
 import { t } from '@/i18n'
 import type { AdminTab } from './admin'
@@ -32,7 +33,7 @@ const outcomes: Record<number, MessageKey> = {
   4: 'admin.mssqlAgent.outcome.inProgress',
   5: 'admin.mssqlAgent.outcome.unknown'
 }
-const outcome = (v: unknown): string => (v === null || v === undefined ? '' : outcomes[Number(v)] ? t(outcomes[Number(v)]) : String(v))
+const outcome = (v: unknown): string => (v === null || v === undefined ? '' : outcomes[Number(v)] ? t(outcomes[Number(v)]) : valueText(v))
 
 /** The service and the jobs were read (the edition was not Express). */
 const loaded = ref(false)

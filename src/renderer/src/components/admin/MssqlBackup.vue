@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { fileListStatement, physicalPath, serverPath } from '@shared/sql/mssql-backup'
 import type { MessageKey } from '@shared/i18n'
+import { valueText } from '@shared/value-text'
 import type { Workspace } from '@/workspace/workspace'
 import { confirm } from '@/dialogs'
 import { t } from '@/i18n'
@@ -136,7 +137,7 @@ onMounted(async () => {
     return
   }
   const row = r.rows[0] ?? {}
-  Object.assign(dirs, { backup: String(row.backup_dir ?? ''), data: String(row.data_dir ?? ''), log: String(row.log_dir ?? '') })
+  Object.assign(dirs, { backup: valueText(row.backup_dir), data: valueText(row.data_dir), log: valueText(row.log_dir) })
   suggestBackupPath()
 })
 </script>

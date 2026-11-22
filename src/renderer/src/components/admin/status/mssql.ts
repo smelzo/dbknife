@@ -1,5 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import type { Row } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import type { Workspace } from '@/workspace/workspace'
 import { metadataQuery } from '@/workspace/catalog/mssql'
 import { formatBytes } from '@/workspace/format'
@@ -61,7 +62,7 @@ const databasesSql = `SELECT d.name, d.state_desc AS state, d.recovery_model_des
   GROUP BY d.name, d.state_desc, d.recovery_model_desc ORDER BY d.name`
 
 const text = (row: Row | undefined): Record<string, string> =>
-  Object.fromEntries(Object.entries(row ?? {}).map(([k, v]) => [k, v === null || v === undefined ? '' : String(v)]))
+  Object.fromEntries(Object.entries(row ?? {}).map(([k, v]) => [k, valueText(v)]))
 
 const kib = (v: string): string => (v === '' ? '' : formatBytes(Number(v) * 1024))
 const seconds = (n: number): string => `${Math.round(n)} s`

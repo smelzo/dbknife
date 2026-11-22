@@ -401,7 +401,7 @@ export class Workspace {
       activeResult: 0,
       running: false,
       lastError: ''
-    }) as QueryTab
+    })
     model.onDidChangeContent(() => {
       const value = model.getValue()
       tab.textToSave = textToSave(value, tab.generatedContent)
@@ -720,7 +720,7 @@ export class Workspace {
           const singleTable = tableName && set.columns.every((c) => c.orgTable === tableName)
           const n = this.resultSeq++
           const title = mode === 'explain' ? t('workspace.result.explain', { n }) : singleTable ? `${tableName} ${n}` : t('workspace.result.title', { n })
-          const rt = reactive(createResultTab(set, sql, r, title, dialect)) as ResultTab
+          const rt = reactive<ResultTab>(createResultTab(set, sql, r, title, dialect))
           if (explain) rt.view = 'plan'
           rt.plan = explain
           // sql differs from the statement only when applyRowLimit added the limit, which binds the first result set

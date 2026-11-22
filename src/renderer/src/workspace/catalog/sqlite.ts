@@ -1,4 +1,5 @@
 import { sqliteDialect } from '@shared/sql/dialect'
+import { valueText } from '@shared/value-text'
 import type { Row } from '@shared/types'
 import type { ColumnMeta, DdlKind, ForeignKeyMeta, IndexMeta, SchemaObjects, TableMeta, TriggerMeta } from '../metadata'
 import type { Catalog, Query } from './catalog'
@@ -50,10 +51,10 @@ export class SqliteCatalog implements Catalog {
     const rowid = await this.rowidAlias(schema, table, rows)
     return rows.map((r) => ({
       name: String(r.name),
-      type: String(r.type ?? ''),
+      type: valueText(r.type),
       nullable: Number(r.nn) === 0,
       key: Number(r.pk) > 0 ? 'PRI' : '',
-      default: r.def === null || r.def === undefined ? null : String(r.def),
+      default: r.def === null || r.def === undefined ? null : valueText(r.def),
       extra:
         r === rowid?.column ? rowid.extra : Number(r.hidden) === 2 ? 'VIRTUAL GENERATED' : Number(r.hidden) === 3 ? 'STORED GENERATED' : '',
       comment: ''
@@ -70,14 +71,14 @@ export class SqliteCatalog implements Catalog {
     columns: Row[]
   ): Promise<{ column: Row; extra: string } | null> {
     const keys = columns.filter((r) => Number(r.pk) > 0)
-    if (keys.length !== 1 || String(keys[0].type ?? '').toUpperCase() !== 'INTEGER') return null
+    if (keys.length !== 1 || valueText(keys[0].type).toUpperCase() !== 'INTEGER') return null
     const [row] = await this.query(
       `SELECT l.wr AS wr, m.sql AS sql FROM pragma_table_list l JOIN ${q(schema)}.sqlite_master m ON m.type = 'table' AND m.name = l.name
        WHERE l.schema = ? AND l.name = ?`,
       [schema, table]
     )
     if (!row || Number(row.wr) !== 0) return null
-    return { column: keys[0], extra: /\bAUTOINCREMENT\b/i.test(String(row.sql ?? '')) ? 'AUTOINCREMENT' : 'rowid' }
+    return { column: keys[0], extra: /\bAUTOINCREMENT\b/i.test(valueText(row.sql)) ? 'AUTOINCREMENT' : 'rowid' }
   }
 
   async indexes(schema: string, table: string): Promise<IndexMeta[]> {
@@ -95,7 +96,7 @@ export class SqliteCatalog implements Catalog {
         index = { name: key, unique: Number(r.uniq) === 1, columns: [], type: primary ? 'PRIMARY KEY' : r.origin === 'u' ? 'UNIQUE' : 'INDEX' }
         byName.set(key, index)
       }
-      index.columns.push(r.col === null ? '<expression>' : String(r.col))
+      index.columns.push(r.col === null ? '<expression>' : valueText(r.col))
     }
     const list = [...byName.values()]
     if (!byName.has('PRIMARY')) {
@@ -122,7 +123,7 @@ export class SqliteCatalog implements Catalog {
       fk.columns.push(String(r.col))
       // REFERENCES parent without columns targets the parent's primary key
       if (r.ref_col === null) fk.implicit = true
-      else fk.refColumns.push(String(r.ref_col))
+      else fk.refColumns.push(valueText(r.ref_col))
     }
     const list = [...byId.values()]
     for (const fk of list.filter((f) => f.implicit)) {
@@ -136,7 +137,7 @@ export class SqliteCatalog implements Catalog {
       `SELECT name, sql FROM ${q(schema)}.sqlite_master WHERE type = 'trigger' AND tbl_name = ? COLLATE NOCASE ORDER BY name`,
       [table]
     )
-    return rows.map((r) => ({ name: String(r.name), ...triggerTiming(String(r.sql ?? '')) }))
+    return rows.map((r) => ({ name: String(r.name), ...triggerTiming(valueText(r.sql)) }))
   }
 
   /** The statement stored in sqlite_master; for an attached database its ATTACH statement. */
@@ -148,6 +149,6 @@ export class SqliteCatalog implements Catalog {
     }
     if (kind !== 'TABLE' && kind !== 'VIEW' && kind !== 'TRIGGER') return ''
     const [row] = await this.query(`SELECT sql FROM ${q(schema)}.sqlite_master WHERE type = ? AND name = ?`, [kind.toLowerCase(), name])
-    return row?.sql ? String(row.sql) : ''
+    return valueText(row?.sql)
   }
 }

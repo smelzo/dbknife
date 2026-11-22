@@ -3,7 +3,8 @@ import type { Catalog } from './catalog/catalog'
 
 export interface TableMeta {
   name: string
-  type: 'BASE TABLE' | 'VIEW' | 'SYSTEM VIEW' | string
+  /** 'BASE TABLE', 'VIEW', 'SYSTEM VIEW' or an engine's own kind. */
+  type: string
   engine: string | null
   rows: number | null
   comment: string

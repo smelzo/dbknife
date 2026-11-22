@@ -1,4 +1,5 @@
 import { qualified } from '@shared/sql/quote'
+import { valueText } from '@shared/value-text'
 import type { ColumnMeta, DdlKind, ForeignKeyMeta, IndexMeta, RoutineMeta, SchemaObjects, TableMeta, TriggerMeta } from '../metadata'
 import type { Catalog, Query } from './catalog'
 
@@ -29,7 +30,7 @@ export class MysqlCatalog implements Catalog {
       type: String(r.type),
       engine: (r.engine as string) ?? null,
       rows: r.rows_ === null ? null : Number(r.rows_),
-      comment: String(r.comment ?? '')
+      comment: valueText(r.comment)
     }))
     return {
       tables: all.filter((t) => !t.type.includes('VIEW')),
@@ -49,10 +50,10 @@ export class MysqlCatalog implements Catalog {
       name: String(r.name),
       type: String(r.type),
       nullable: r.nullable === 'YES',
-      key: String(r.key_ ?? ''),
-      default: r.def === null || r.def === undefined ? null : String(r.def),
-      extra: String(r.extra ?? ''),
-      comment: String(r.comment ?? '')
+      key: valueText(r.key_),
+      default: r.def === null || r.def === undefined ? null : valueText(r.def),
+      extra: valueText(r.extra),
+      comment: valueText(r.comment)
     }))
   }
 
@@ -68,7 +69,7 @@ export class MysqlCatalog implements Catalog {
       name: String(r.name),
       unique: Number(r.non_unique) === 0,
       type: String(r.type),
-      columns: String(r.cols ?? '').split('\u0001')
+      columns: valueText(r.cols).split('\u0001')
     }))
   }
 
@@ -86,8 +87,8 @@ export class MysqlCatalog implements Catalog {
       name: String(r.name),
       refSchema: String(r.ref_schema),
       refTable: String(r.ref_table),
-      columns: String(r.cols ?? '').split('\u0001'),
-      refColumns: String(r.ref_cols ?? '').split('\u0001')
+      columns: valueText(r.cols).split('\u0001'),
+      refColumns: valueText(r.ref_cols).split('\u0001')
     }))
   }
 

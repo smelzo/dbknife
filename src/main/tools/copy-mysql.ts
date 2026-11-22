@@ -4,6 +4,7 @@ import { t } from '@shared/i18n'
 import { buildCopyPlan, tableTypeKinds, type CopyKind, type PlanInput, type PlanStep, type PlanWarning, type SourceObject } from '@shared/sql/copy-plan'
 import { quoteIdentifier } from '@shared/sql/quote'
 import type { CopyOptions, CopyPreview, CopySchemaRef, Row } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import { forkSession } from '../db/create-session'
 import { expandHome, type DbSession } from '../db/session'
 import { checkCancelled, report, runPiped, type Job } from './jobs'
@@ -43,7 +44,7 @@ export async function select(session: DbSession, sql: string, params?: unknown[]
   return r.rows
 }
 
-const text = (v: unknown): string | undefined => (v === null || v === undefined ? undefined : String(v))
+const text = (v: unknown): string | undefined => (v === null || v === undefined ? undefined : valueText(v))
 
 /**
  * The server's collations. COLLATIONS lists MariaDB 10.10+'s UCA 14 collations without their

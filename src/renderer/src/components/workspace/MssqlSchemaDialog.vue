@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { valueText } from '@shared/value-text'
 import { reviewAndApply } from '@/workspace/review'
 import { metadataQuery } from '@/workspace/catalog/mssql'
 import { t } from '@/i18n'
@@ -29,7 +30,7 @@ onMounted(async () => {
     ).map((r) => String(r.name))
     if (props.schema) {
       const [r] = await query('SELECT USER_NAME(principal_id) AS owner FROM sys.schemas WHERE name = @p1', [props.schema])
-      originalOwner = owner.value = String(r?.owner ?? '')
+      originalOwner = owner.value = valueText(r?.owner)
     }
   } catch (e) {
     error.value = (e as Error).message

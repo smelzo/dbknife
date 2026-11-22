@@ -243,9 +243,9 @@ function launch(client: Client, name: string): Promise<HelperLink> {
         if (probe.id === 1) return resolve(link)
         link.kill()
         reject(new StartError(t('main.channel.startFailed', { error: probe.error?.message ?? '' }), false))
-      }, (err) => {
+      }, (err: unknown) => {
         link.kill()
-        reject(err)
+        reject(err instanceof Error ? err : new Error(String(err)))
       })
     })
   })

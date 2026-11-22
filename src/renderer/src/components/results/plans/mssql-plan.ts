@@ -45,7 +45,7 @@ const scanOperators: Record<string, string> = { EQ: '=', GT: '>', GE: '>=', LT: 
 const maxPredicate = 200
 
 const attr = (n: XmlNode | undefined, name: string): string => (typeof n?.[`@${name}`] === 'string' ? (n[`@${name}`] as string) : '')
-const children = (n: XmlNode | undefined, name: string): XmlNode[] => (Array.isArray(n?.[name]) ? (n[name] as XmlNode[]) : [])
+const children = (n: XmlNode | undefined, name: string): XmlNode[] => (Array.isArray(n?.[name]) ? n[name] : [])
 const elements = (n: XmlNode): [string, XmlNode[]][] =>
   Object.entries(n).filter((e): e is [string, XmlNode[]] => !e[0].startsWith('@') && Array.isArray(e[1]))
 

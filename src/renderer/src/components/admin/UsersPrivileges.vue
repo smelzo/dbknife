@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { Row } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import {
   accountName,
   accountStatements,
@@ -133,7 +134,7 @@ async function loadAccount(a: AccountRef): Promise<Account> {
     user: a.user,
     host: a.host,
     // old MariaDB accounts have an empty plugin, meaning the native one
-    plugin: String(u.plugin || 'mysql_native_password'),
+    plugin: valueText(u.plugin || 'mysql_native_password'),
     limits: {
       maxQueries: Number(u.maxQueries),
       maxUpdates: Number(u.maxUpdates),

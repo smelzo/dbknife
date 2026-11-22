@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { FolderOpen, RefreshCw } from 'lucide-vue-next'
 import type { DumpOptions, ToolInfo } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import type { Workspace } from '@/workspace/workspace'
 import { t } from '@/i18n'
 import type { AdminTab } from './admin'
@@ -131,7 +132,7 @@ watch(
 onMounted(async () => {
   if (bacpac) {
     targetKind.value = 'file'
-    database.value = String((await props.ws.query('SELECT DB_NAME() AS db'))[0]?.db ?? '')
+    database.value = valueText((await props.ws.query('SELECT DB_NAME() AS db'))[0]?.db)
     tool.value = (await window.api.tools.find(props.ws.sessionId)).dump
     toolChecked.value = true
     return

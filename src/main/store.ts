@@ -248,7 +248,7 @@ export function loadHistory(days: number): HistoryEntry[] {
     for (const line of readFileSync(join(dir, f), 'utf8').split('\n')) {
       if (!line) continue
       try {
-        out.push(JSON.parse(line))
+        out.push(JSON.parse(line) as HistoryEntry)
       } catch {
         // skip a partially written line
       }

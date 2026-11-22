@@ -90,14 +90,15 @@ export class SqliteSession implements DbSession {
   ) {}
 
   /** What open() needs before the first connection. */
-  protected async prepare(): Promise<void> {
+  protected prepare(): Promise<void> {
     // a missing file is created, but not its folder
-    if (!existsSync(dirname(this.file))) throw new Error(t('main.sqlite.missingFolder', { file: this.file, folder: dirname(this.file) }))
+    if (!existsSync(dirname(this.file))) return Promise.reject(new Error(t('main.sqlite.missingFolder', { file: this.file, folder: dirname(this.file) })))
+    return Promise.resolve()
   }
 
   /** Where a connection runs; connect() opens the database on it. */
-  protected async newLink(): Promise<SqliteLink> {
-    return new Connection()
+  protected newLink(): Promise<SqliteLink> {
+    return Promise.resolve(new Connection())
   }
 
   private async connect(): Promise<SqliteLink> {
@@ -203,10 +204,12 @@ export class SqliteSession implements DbSession {
   }
 
   /** Kills the user connection's process if a statement is running; the next statement reopens it. */
-  async cancel(): Promise<void> {
-    if (!this.user?.busy) return
-    this.interrupted = this.user
-    this.user.kill()
+  cancel(): Promise<void> {
+    if (this.user?.busy) {
+      this.interrupted = this.user
+      this.user.kill()
+    }
+    return Promise.resolve()
   }
 
   currentSchema(): string {

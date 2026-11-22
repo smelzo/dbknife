@@ -20,10 +20,11 @@ import { quoteIdentifier as mysqlIdentifier, sqlLiteral as mysqlLiteral, quoteSt
 export interface Dialect {
   engine: Engine
   rules: LexerRules
-  quoteIdentifier(name: string): string
+  // function properties rather than methods: they do not use `this` and are passed around detached
+  quoteIdentifier: (name: string) => string
   /** `schema.name`, or `name` without a schema. */
-  qualified(schema: string | undefined, name: string): string
-  quoteString(value: string): string
+  qualified: (schema: string | undefined, name: string) => string
+  quoteString: (value: string) => string
   /** Column types, as the catalog writes them, holding numbers (bit included). */
   numericType: RegExp
   /** SQL literal for a cell value; `column`, when known, is the result column the value belongs to. */

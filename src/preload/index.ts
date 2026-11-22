@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type { Api } from '@shared/api'
+import type { I18nInfo } from '@shared/types'
 
 const invoke =
   <T>(channel: string) =>
@@ -111,7 +112,7 @@ const api: Api = {
     save: invoke('snippets:save')
   },
   i18n: {
-    info: ipcRenderer.sendSync('i18n:get'),
+    info: ipcRenderer.sendSync('i18n:get') as I18nInfo,
     list: invoke('i18n:list'),
     install: invoke('i18n:install'),
     remove: invoke('i18n:remove'),

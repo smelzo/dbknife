@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, watch } from 'vue'
 import { quoteString } from '@shared/sql/quote'
+import { valueText } from '@shared/value-text'
 import type { EditorTab, Workspace } from '@/workspace/workspace'
 import { useApp } from '@/stores/app'
 
@@ -10,7 +11,7 @@ export async function fetchGlobals(ws: Workspace, kind: 'STATUS' | 'VARIABLES', 
   const where = names ? ` WHERE Variable_name IN (${names.map(quoteString).join(', ')})` : ''
   const r = await window.api.db.query(ws.sessionId, `SHOW GLOBAL ${kind}${where}`)
   if (r.error) throw new Error(r.error.message)
-  return Object.fromEntries(r.rows.map((row) => [String(row.Variable_name), String(row.Value ?? '')]))
+  return Object.fromEntries(r.rows.map((row) => [String(row.Variable_name), valueText(row.Value)]))
 }
 
 /**

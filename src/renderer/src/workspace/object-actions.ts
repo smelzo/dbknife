@@ -153,9 +153,11 @@ export async function vacuumDatabase(ws: Workspace, schema: string): Promise<voi
   if (!r.ok) await alertError(t('database.vacuumFailed', { name: ws.schemaLabel(schema) }), r.error)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- type of a .vue import, not read by typescript-eslint
 const schemaDialogs: Partial<Record<Engine, Component>> = { postgres: PostgresSchemaDialog, mssql: MssqlSchemaDialog }
 
 export async function schemaDialog(ws: Workspace, schema: string | null): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- type of a .vue import, not read by typescript-eslint
   await openDialog(schemaDialogs[ws.dialect.engine] ?? SchemaDialog, { ws, schema })
 }
 
@@ -208,7 +210,7 @@ export async function newDatabase(ws: Workspace): Promise<void> {
   )
   if (!open) return
   const copy: ConnectionConfig = {
-    ...JSON.parse(JSON.stringify(ws.config)),
+    ...(JSON.parse(JSON.stringify(ws.config)) as ConnectionConfig),
     id: crypto.randomUUID(),
     name: t('database.connectionName', { name: ws.config.name, database: name }),
     database: name,

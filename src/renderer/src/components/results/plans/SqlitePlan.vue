@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ResultSet } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import { t } from '@/i18n'
 
 /**
@@ -38,7 +39,7 @@ const steps = computed<Step[]>(() => {
   const out: Step[] = []
   const walk = (key: number, depth: number): void => {
     for (const row of children.get(key) ?? []) {
-      const text = String(row[detail] ?? '')
+      const text = valueText(row[detail])
       const [label, cls] = classify(text)
       out.push({ detail: text, depth, label, cls })
       walk(Number(row[id]), depth + 1)

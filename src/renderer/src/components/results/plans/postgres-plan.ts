@@ -50,8 +50,9 @@ const detailKeys = ['Index Cond', 'Hash Cond', 'Merge Cond', 'Join Filter', 'Rec
 
 /** Parses the plan cell (JSON text or an already parsed value) into its nodes in pre-order. */
 export function planNodes(cell: unknown): PlanNode[] {
-  const json = typeof cell === 'string' ? JSON.parse(cell) : cell
-  const root = (Array.isArray(json) ? json[0] : json)?.Plan as JsonNode | undefined
+  const json: unknown = typeof cell === 'string' ? JSON.parse(cell) : cell
+  const top: unknown = Array.isArray(json) ? json[0] : json
+  const root = typeof top === 'object' && top !== null && 'Plan' in top ? (top.Plan as JsonNode | undefined) : undefined
   if (!root) throw new Error(t('plan.notPostgresJson'))
   const out: PlanNode[] = []
   const visit = (n: JsonNode, depth: number): void => {

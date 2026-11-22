@@ -127,7 +127,7 @@ function isValidMessage(value: unknown, allowed: Set<string>): value is Message 
 }
 
 function placeholders(message: Message): Set<string> {
-  const texts = typeof message === 'string' ? [message] : (Object.values(message) as string[])
+  const texts = typeof message === 'string' ? [message] : Object.values<string>(message)
   return new Set(texts.flatMap((text) => [...text.matchAll(placeholder)].map((m) => m[1])))
 }
 

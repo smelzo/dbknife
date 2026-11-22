@@ -68,6 +68,12 @@ export async function writeXlsx(path: string, lines: string[]): Promise<void> {
 /** A cell of d-spread's output (docs/protocol.md of d-spread): a plain value, or an object with the keys it needs. */
 type ProtocolCell = SpreadCell | { v?: SpreadCell; n?: number; e?: string }
 
+/** The first line of d-spread's output. */
+type ProtocolHeader = { protocol?: unknown; format?: string; sheets?: string[]; sheet?: number; cols?: number; formats?: { date?: boolean }[] }
+
+/** A line of d-spread's output: the header, then [row number, cells] for each row, then the closing { end: true }. */
+type ProtocolLine = (ProtocolHeader & { end?: boolean }) | [number, ProtocolCell[]] | null
+
 function cellValue(cell: ProtocolCell, formats: { date?: boolean }[]): SpreadCell {
   if (cell === null || typeof cell !== 'object') return cell
   if (cell.e !== undefined) return null
@@ -100,18 +106,18 @@ export async function readSpread(path: string, sheet?: number): Promise<SpreadSh
   })
   // a failed spawn rejects while the output is being read: it is awaited after the loop
   exited.catch(() => {})
-  let header: { protocol?: unknown; format?: string; sheets?: string[]; sheet?: number; cols?: number; formats?: { date?: boolean }[] } | undefined
+  let header: ProtocolHeader | undefined
   let ended = false
   const rows: SpreadCell[][] = []
   try {
     for await (const line of createInterface({ input: child.stdout, crlfDelay: Infinity })) {
       if (!line) continue
-      const value = JSON.parse(line)
+      const value = JSON.parse(line) as ProtocolLine
       if (!header) {
-        if (value?.protocol !== 1) throw new Error(t('main.spread.badOutput'))
+        if (Array.isArray(value) || value?.protocol !== 1) throw new Error(t('main.spread.badOutput'))
         header = value
       } else if (Array.isArray(value)) {
-        const [n, cells] = value as [number, ProtocolCell[]]
+        const [n, cells] = value
         // rows without data are left out of the output: an empty one keeps rows[n - 1] on row n
         while (rows.length < n - 1) rows.push([])
         const row = cells.map((c) => cellValue(c, header!.formats ?? []))

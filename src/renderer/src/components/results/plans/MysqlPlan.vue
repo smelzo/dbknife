@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ResultSet } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import type { MessageKey } from '@shared/i18n'
 import { t } from '@/i18n'
 
@@ -44,7 +45,7 @@ const steps = computed<Step[]>(() => {
   const idx = (name: string): number => p.columns.findIndex((c) => c.name.toLowerCase() === name)
   const get = (row: unknown[], name: string): string => {
     const i = idx(name)
-    return i < 0 || row[i] === null ? '' : String(row[i])
+    return i < 0 ? '' : valueText(row[i])
   }
   return p.rows.map((row) => {
     const type = get(row, 'type')

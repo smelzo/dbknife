@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { spreadWriteLines } from '@shared/spread-write'
 
-const parsed = (lines: string[]): unknown[] => lines.map((l) => JSON.parse(l))
+const parsed = (lines: string[]): unknown[] => lines.map((l): unknown => JSON.parse(l))
 
 /** The cells of the first data row (row 2) for one column. */
 function cellOf(value: string | number | null, numeric: boolean): unknown {

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RefreshCw } from 'lucide-vue-next'
 import type { Row } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import { t } from '@/i18n'
 import { formatBytes } from '@/workspace/format'
 import type { EditorTab, Workspace } from '@/workspace/workspace'
@@ -28,7 +29,7 @@ const analyzeOp = computed(() => props.ws.features.maintenance.find((op) => op.n
 function text(row: Row, field: Field): string {
   const v = row[field.key]
   if (v === null || v === undefined) return field.bytes ? '' : 'NULL'
-  return field.bytes ? formatBytes(Number(v)) : String(v)
+  return field.bytes ? formatBytes(Number(v)) : valueText(v)
 }
 
 async function refresh(): Promise<void> {

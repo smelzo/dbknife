@@ -3,6 +3,7 @@ import pg, { type ClientConfig, type FieldDef, type QueryArrayResult } from 'pg'
 import type { NoticeMessage } from 'pg-protocol/dist/messages.js'
 import type { AutocommitResult, Cell, ColumnInfo, ColumnKind, DbError, ExecResult, ResultSet, Row, ServerInfo, SqlWarning } from '@shared/types'
 import { opensTransaction } from '@shared/sql/transaction'
+import { valueText } from '@shared/value-text'
 import { ServerSession } from '../server-session'
 import { expandHome, toDbError } from '../session'
 
@@ -23,7 +24,8 @@ const toFloat = (v: string): number | string => {
  */
 const parsers: Record<number, (v: string) => unknown> = {
   [Oid.bool]: (v) => (v === 't' ? 'true' : 'false'),
-  [Oid.bytea]: pg.types.getTypeParser(Oid.bytea),
+  // pg-types declares its parsers as returning any; the text parser of bytea gives a Buffer
+  [Oid.bytea]: pg.types.getTypeParser(Oid.bytea) as (v: string) => Buffer,
   [Oid.int2]: toInt,
   [Oid.int4]: toInt,
   [Oid.oid]: toInt,
@@ -283,12 +285,12 @@ export class PostgresSession extends ServerSession<pg.Client> {
     ])
     for (const r of types?.rows ?? []) {
       const kind: ColumnKind = r.oid === Oid.bytea ? 'binary' : r.cat === 'N' ? 'number' : 'text'
-      this.types.set(`${r.oid}:${r.mod}`, { name: String(r.name), kind })
+      this.types.set(`${valueText(r.oid)}:${valueText(r.mod)}`, { name: String(r.name), kind })
     }
     const origin = new Map<string, Origin>()
     for (const r of origins?.rows ?? []) {
       const attributes = [r.notnull === 'true' && 'NOT_NULL', r.pk === 'true' && 'PRI_KEY'].filter(Boolean).join(' ')
-      origin.set(`${r.tid}:${r.num}`, { schema: String(r.schema), table: String(r.table), column: String(r.column), attributes })
+      origin.set(`${valueText(r.tid)}:${valueText(r.num)}`, { schema: String(r.schema), table: String(r.table), column: String(r.column), attributes })
     }
     return fields.map((f) => {
       const type = this.types.get(typeKey(f)) ?? {

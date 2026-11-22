@@ -91,6 +91,7 @@ export function installCommands(homeActions: { newConnection: () => void }): voi
     }
     switch (command) {
       case 'app.preferences':
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- type of a .vue import, not read by typescript-eslint
         await openDialog(PreferencesDialog)
         return
       case 'app.restart':
@@ -162,6 +163,7 @@ export function installCommands(homeActions: { newConnection: () => void }): voi
         await ws.saveCsv()
         break
       case 'file.runScript':
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- type of a .vue import, not read by typescript-eslint
         runScriptRequests.add(ws.id)
         ws.openAdmin('import')
         break

@@ -1,4 +1,5 @@
 import { computed, reactive, ref } from 'vue'
+import { valueText } from '@shared/value-text'
 import type { Workspace } from '@/workspace/workspace'
 import { formatBytes } from '@/workspace/format'
 import { formatLocale, t } from '@/i18n'
@@ -68,8 +69,8 @@ export function usePostgresStatus(ws: Workspace): StatusModel {
     error.value = ''
     try {
       const [rows, [row]] = await Promise.all([ws.query('SELECT name, setting, unit FROM pg_settings'), ws.query(infoSql)])
-      settings.value = Object.fromEntries(rows.map((r) => [String(r.name), { value: String(r.setting ?? ''), unit: String(r.unit ?? '') }]))
-      info.value = Object.fromEntries(Object.entries(row).map(([k, v]) => [k, v === null ? '' : String(v)]))
+      settings.value = Object.fromEntries(rows.map((r) => [String(r.name), { value: valueText(r.setting), unit: valueText(r.unit) }]))
+      info.value = Object.fromEntries(Object.entries(row).map(([k, v]) => [k, valueText(v)]))
     } catch (e) {
       error.value = (e as Error).message
     }

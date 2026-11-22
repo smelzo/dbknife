@@ -152,7 +152,7 @@ export async function run(job: Job, tool: ToolInfo, args: string[], io: RunIo): 
   if (code.status === 'rejected') throw code.reason
   if (code.value !== 0) throw exitError(tool, code.value, lastError())
   const failed = piped.find((p) => p.status === 'rejected')
-  if (failed) throw (failed as PromiseRejectedResult).reason
+  if (failed) throw failed.reason
 }
 
 /**

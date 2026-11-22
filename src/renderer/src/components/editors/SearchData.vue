@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Play, Square } from 'lucide-vue-next'
 import type { Cell, Engine } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import { applyRowLimit } from '@shared/sql/analyze'
 import { t } from '@/i18n'
 import { runInNewTab } from '@/workspace/object-actions'
@@ -183,7 +184,7 @@ async function search(): Promise<void> {
         searchable.forEach((col, j) => {
           const v = row[`c${keyColumns.length + j}`]
           if (v === null || v === undefined) return
-          const value = v instanceof Uint8Array ? new TextDecoder().decode(v) : String(v)
+          const value = valueText(v)
           if (test(value)) found.push({ schema, table, keyColumns, keyTypes, key, column: col.name, type: col.type, value })
         })
       }

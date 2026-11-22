@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { valueText } from '@shared/value-text'
 import { reviewAndApply } from '@/workspace/review'
 import { t } from '@/i18n'
 import type { Workspace } from '@/workspace/workspace'
@@ -30,8 +31,8 @@ onMounted(async () => {
         "SELECT pg_get_userbyid(nspowner) AS owner, obj_description(oid, 'pg_namespace') AS comment FROM pg_namespace WHERE nspname = $1",
         [props.schema]
       )
-      original.owner = owner.value = String(r?.owner ?? '')
-      original.comment = comment.value = String(r?.comment ?? '')
+      original.owner = owner.value = valueText(r?.owner)
+      original.comment = comment.value = valueText(r?.comment)
     }
   } catch (e) {
     error.value = (e as Error).message

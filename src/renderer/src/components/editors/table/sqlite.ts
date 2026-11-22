@@ -29,7 +29,7 @@ export const sqliteTableEditor: TableEditorEngine = {
     options: { engine: '', charset: '', collation: '', rowFormat: '', autoIncrement: '', comment: '', other: '', partition: '' }
   }),
   load: (ws, schema, table) => loadSqliteTable(ws.query, schema, table),
-  collations: async () => ['BINARY', 'NOCASE', 'RTRIM'].map((name) => ({ charset: '', name })),
+  collations: () => Promise.resolve(['BINARY', 'NOCASE', 'RTRIM'].map((name) => ({ charset: '', name }))),
   create: createTableSql,
   alter: alterTableSql,
   cleanup: rebuildCleanup,

@@ -8,6 +8,7 @@ import type { AlignAction, AlignKind, AlignNote, AlignOptions, AlignStatus } fro
 import { normalizedDefinition } from './copy-plan'
 import { significantTokens } from './lexer'
 import { quoteIdentifier, toHex } from './quote'
+import { valueText } from '../value-text'
 
 export type Flavor = 'mysql' | 'mariadb'
 
@@ -437,7 +438,7 @@ export function rowChanges(source: unknown[], target: unknown[]): number[] {
         ? a === b
         : a instanceof Uint8Array || b instanceof Uint8Array
           ? a instanceof Uint8Array && b instanceof Uint8Array && bytesEqual(a, b)
-          : String(a) === String(b)
+          : valueText(a) === valueText(b)
     if (!equal) changed.push(i)
   })
   return changed
@@ -513,6 +514,6 @@ export function rowBytes(values: unknown[]): number {
 export function sampleValue(v: unknown): string | null {
   if (v == null) return null
   if (v instanceof Uint8Array) return '0x' + toHex(v.subarray(0, 32)) + (v.length > 32 ? ` … (${v.length} B)` : '')
-  const s = String(v)
+  const s = valueText(v)
   return s.length > 200 ? s.slice(0, 200) + '…' : s
 }

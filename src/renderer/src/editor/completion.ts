@@ -111,7 +111,7 @@ async function provide(
 function dedupe(items: monaco.languages.CompletionItem[]): monaco.languages.CompletionItem[] {
   const seen = new Set<string>()
   return items.filter((i) => {
-    const k = `${i.label}\u0000${i.kind}`
+    const k = `${typeof i.label === 'string' ? i.label : i.label.label}\u0000${i.kind}`
     if (seen.has(k)) return false
     seen.add(k)
     return true

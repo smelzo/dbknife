@@ -15,5 +15,6 @@ export async function reviewAndApply(
   options: { title?: string; description?: string; cleanup?: string[]; exempt?: string[] } = {}
 ): Promise<boolean> {
   if (!statements.length) return false
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- type of a .vue import, not read by typescript-eslint
   return !!(await openDialog<boolean>(ReviewSqlDialog, { ws, statements, ...options }))
 }

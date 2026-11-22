@@ -11,10 +11,14 @@ import type {
   ConnectionConfig,
   Credentials,
   ExecOptions,
+  HistoryEntry,
   MenuItemSpec,
   OpenSessionResult,
   RecentFile,
-  SecretKind
+  SecretKind,
+  Settings,
+  Snippet,
+  WorkspaceState
 } from '@shared/types'
 import { browseClose, browseList, browseOpen, closeAllBrowsing, verifyChannel } from './channels'
 import { allowClose } from './close-guard'
@@ -340,13 +344,13 @@ export function registerIpc(): void {
 
   // settings, workspaces, history, snippets
   ipcMain.handle('settings:get', () => store.getSettings())
-  ipcMain.handle('settings:set', (_e, patch) => store.updateSettings(patch))
+  ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => store.updateSettings(patch))
   ipcMain.handle('workspace:load', (_e, id: string) => store.loadWorkspace(id))
-  ipcMain.handle('workspace:save', (_e, id: string, state) => store.saveWorkspace(id, state))
-  ipcMain.handle('history:append', (_e, entries) => store.appendHistory(entries))
+  ipcMain.handle('workspace:save', (_e, id: string, state: WorkspaceState) => store.saveWorkspace(id, state))
+  ipcMain.handle('history:append', (_e, entries: HistoryEntry[]) => store.appendHistory(entries))
   ipcMain.handle('history:load', (_e, days: number) => store.loadHistory(days))
   ipcMain.handle('snippets:load', () => withDefaultSnippets(store.loadSnippets(), importWorkbenchSnippets))
-  ipcMain.handle('snippets:save', (_e, s) => store.saveSnippets(s))
+  ipcMain.handle('snippets:save', (_e, s: Snippet[]) => store.saveSnippets(s))
 
   // languages
   ipcMain.on('i18n:get', (e) => {

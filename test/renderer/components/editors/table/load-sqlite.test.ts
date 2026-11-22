@@ -36,8 +36,9 @@ function open(sql: string): DatabaseSync {
   return db
 }
 
-const query = (db: DatabaseSync) => async (sql: string, params: unknown[] = []): Promise<Row[]> =>
-  db.prepare(sql).all(...(params as never[])) as Row[]
+// an SQL error rejects the promise, as with a session
+const query = (db: DatabaseSync) => (sql: string, params: unknown[] = []): Promise<Row[]> =>
+  Promise.resolve().then(() => db.prepare(sql).all(...(params as never[])))
 
 const run = (db: DatabaseSync, statements: string[]): void => statements.forEach((s) => db.exec(s))
 

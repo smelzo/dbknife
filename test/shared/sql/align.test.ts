@@ -213,6 +213,7 @@ describe('keyset paging', () => {
         .replace(/\bOR\b/g, '||')
         .replace(/\bAND\b/g, '&&')
       expect(p).toBe(params.length)
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval -- the test evaluates the generated condition as JavaScript on purpose
       const test = new Function('r', `return ${js}`) as (r: Record<string, number>) => boolean
       const after = tuples.filter(([a, b, c]) => test({ a, b, c }))
       expect(after, JSON.stringify(last)).toEqual(tuples.slice(tuples.indexOf(last) + 1))

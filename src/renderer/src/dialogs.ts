@@ -38,6 +38,7 @@ export function prompt(options: {
   fields: PromptField[]
   okLabel?: string
 }): Promise<Record<string, string | boolean> | undefined> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- type of a .vue import, not read by typescript-eslint
   return openDialog(PromptDialog, options)
 }
 

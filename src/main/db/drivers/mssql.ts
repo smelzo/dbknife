@@ -6,6 +6,7 @@ import { t } from '@shared/i18n'
 import { statementKind } from '@shared/sql/analyze'
 import { mssqlDialect, mssqlNumericType } from '@shared/sql/dialect'
 import { tsqlRules } from '@shared/sql/lexer'
+import { valueText } from '@shared/value-text'
 import type { AutocommitResult, Cell, ColumnInfo, ColumnKind, DbError, ExecResult, ResultSet, Row, ServerInfo, SqlWarning } from '@shared/types'
 import { ServerSession } from '../server-session'
 import { expandHome, toDbError } from '../session'
@@ -139,7 +140,7 @@ function addParameter(request: Request, name: string, value: unknown): void {
   else if (value instanceof Uint8Array) request.addParameter(name, TYPES.VarBinary, Buffer.from(value))
   else if (value instanceof Date) request.addParameter(name, TYPES.DateTime2, value)
   else if (typeof value === 'object') request.addParameter(name, TYPES.NVarChar, JSON.stringify(value))
-  else request.addParameter(name, TYPES.NVarChar, String(value))
+  else request.addParameter(name, TYPES.NVarChar, valueText(value))
 }
 
 /** COMMIT / ROLLBACK typed alone, which SQL Server rejects when no transaction is open. */
@@ -273,7 +274,8 @@ export class MssqlSession extends ServerSession<Connection> {
         current = { columns: columns as ColumnMetadata[], rows: [] }
         batch.sets.push(current)
       })
-      request.on('row', (values) => current?.rows.push(values.map((v: { value: unknown; metadata: ColumnMetadata }) => cell(v.value, v.metadata))))
+      // an array, as useColumnNames is not set
+      request.on('row', (values: { value: unknown; metadata: ColumnMetadata }[]) => current?.rows.push(values.map((v) => cell(v.value, v.metadata))))
       request.on('done', onDone)
       request.on('doneInProc', onDone)
       request.on('doneProc', onDone)
@@ -341,7 +343,7 @@ export class MssqlSession extends ServerSession<Connection> {
     )
     // "SQL Server 2019 Express 15.0.2000.5"; Azure SQL has no year in @@VERSION
     const year = /SQL Server (\d{4})/.exec(String(row.v))?.[1]
-    const edition = String(row.ed ?? '').replace(/\s*Edition\b.*$/, '')
+    const edition = valueText(row.ed).replace(/\s*Edition\b.*$/, '')
     const product = year ? `SQL Server ${year}` : String(row.v).split(/ [-(]/)[0].replace(/^Microsoft /, '')
     this.database = String(row.db)
     return {
@@ -436,8 +438,8 @@ export class MssqlSession extends ServerSession<Connection> {
     )
     if (r.error || r.rows.length !== columns.length || r.rows.some((row, i) => (row.name ?? '') !== columns[i].colName)) return undefined
     return r.rows.map((row) => {
-      const sourced = row.tbl && row.col && (!row.db || String(row.db).toLowerCase() === this.database.toLowerCase())
-      if (!sourced) return { name: String(row.name ?? ''), type: String(row.type ?? ''), schema: '', table: '', column: '', attributes: '' }
+      const sourced = row.tbl && row.col && (!row.db || valueText(row.db).toLowerCase() === this.database.toLowerCase())
+      if (!sourced) return { name: valueText(row.name), type: valueText(row.type), schema: '', table: '', column: '', attributes: '' }
       const attributes = [row.nullable === 0 && 'NOT_NULL', row.pk === 1 && 'PRI_KEY', row.ident === 1 && 'AUTO_INCREMENT'].filter(Boolean).join(' ')
       return { name: String(row.name), type: String(row.type), schema: String(row.sch), table: String(row.tbl), column: String(row.col), attributes }
     })
@@ -498,7 +500,8 @@ export class MssqlSession extends ServerSession<Connection> {
   }
 
   /** Sends an attention to stop the running batch, on the user connection itself. */
-  async cancel(): Promise<void> {
+  cancel(): Promise<void> {
     this.user?.cancel()
+    return Promise.resolve()
   }
 }

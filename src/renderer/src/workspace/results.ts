@@ -143,7 +143,7 @@ function sameValue(a: Cell, b: Cell): boolean {
 }
 
 export function addRow(tab: ResultTab): number {
-  tab.added.push(new Array(tab.columns.length).fill(undefined))
+  tab.added.push(new Array<Cell | undefined>(tab.columns.length).fill(undefined))
   tab.version++
   return rowCount(tab) - 1
 }

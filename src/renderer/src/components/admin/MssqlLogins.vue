@@ -13,6 +13,7 @@ import {
   type Permissions
 } from '@shared/sql/mssql-logins'
 import { inTransaction } from '@shared/sql/transaction'
+import { valueText } from '@shared/value-text'
 import { metadataQuery, yes } from '@/workspace/catalog/mssql'
 import type { Workspace } from '@/workspace/workspace'
 import { reviewAndApply } from '@/workspace/review'
@@ -145,8 +146,8 @@ async function loadLogin(name: string): Promise<{ login: Login; user: string | n
     login: {
       name,
       windows: String(r.type).trim() !== 'S',
-      defaultDatabase: String(r.default_database_name ?? 'master'),
-      defaultLanguage: String(r.default_language_name ?? ''),
+      defaultDatabase: valueText(r.default_database_name ?? 'master'),
+      defaultLanguage: valueText(r.default_language_name),
       disabled: yes(r.is_disabled),
       checkPolicy: yes(r.is_policy_checked),
       checkExpiration: yes(r.is_expiration_checked),
@@ -183,7 +184,7 @@ async function loadUser(name: string): Promise<DatabaseUser> {
   }
   return {
     name,
-    defaultSchema: String(r.default_schema_name ?? ''),
+    defaultSchema: valueText(r.default_schema_name),
     roles: roles.map((m) => String(m.name)),
     database: onDatabase,
     schemas: [...bySchema].map(([schema, permissions]) => ({ schema, permissions }))

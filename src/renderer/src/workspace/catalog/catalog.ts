@@ -36,6 +36,6 @@ export function createCatalog(engine: Engine, query: Query): Catalog {
     case 'mssql':
       return new MssqlCatalog(query)
     default:
-      throw new Error(`No catalog for ${engine}`)
+      throw new Error(`No catalog for ${String(engine)}`)
   }
 }

@@ -30,6 +30,7 @@ import {
 import { buildCopyPlan, normalizedDefinition, tableTypeKinds, type CopyKind, type PlanStep, type SourceObject } from '@shared/sql/copy-plan'
 import { qualified, quoteIdentifier } from '@shared/sql/quote'
 import type { AlignKind, AlignNote, AlignObjectDiff, AlignPreview, AlignRequest, Row } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import { forkSession } from '../db/create-session'
 import type { MysqlSession } from '../db/drivers/mysql'
 import type { DbSession } from '../db/session'
@@ -127,7 +128,7 @@ interface RowCounts {
   delete: number
 }
 
-const str = (v: unknown): string | null => (v == null ? null : Buffer.isBuffer(v) ? v.toString('utf8') : String(v))
+const str = (v: unknown): string | null => (v == null ? null : valueText(v))
 const num = (v: unknown): number | null => (v == null ? null : Number(v))
 
 /** Runs a statement on the auxiliary connection; the error keeps the server's errno. Returns the first row (the OK packet of DML). */

@@ -222,7 +222,7 @@ export const useApp = defineStore('app', () => {
     connecting.value = config.id
     try {
       const r = config.temporary
-        ? await window.api.db.openTemporary(JSON.parse(JSON.stringify(config)))
+        ? await window.api.db.openTemporary(JSON.parse(JSON.stringify(config)) as ConnectionConfig)
         : await withCredentials(config, (creds) => window.api.db.open(config.id, creds))
       if (!r) return
       if (!r.ok) {

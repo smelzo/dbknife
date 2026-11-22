@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { quoteIdentifier } from '@shared/sql/quote'
+import { valueText } from '@shared/value-text'
 import { reviewAndApply } from '@/workspace/review'
 import { t } from '@/i18n'
 import type { Workspace } from '@/workspace/workspace'
@@ -31,8 +32,8 @@ onMounted(async () => {
       'SELECT DEFAULT_CHARACTER_SET_NAME AS cs, DEFAULT_COLLATION_NAME AS co FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?',
       [props.schema]
     )
-    original.charset = charset.value = String(r?.cs ?? '')
-    original.collation = collation.value = String(r?.co ?? '')
+    original.charset = charset.value = valueText(r?.cs)
+    original.collation = collation.value = valueText(r?.co)
   }
 })
 

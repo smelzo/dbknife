@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
-import mysql, { type Connection, type ConnectionOptions, type FieldPacket } from 'mysql2'
+import mysql, { type Connection, type ConnectionOptions, type FieldPacket, type QueryError } from 'mysql2'
 import type { Cell, ColumnInfo, ColumnKind, DbError, ExecResult, ResultSet, Row, ServerInfo, SqlWarning } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import { ServerSession } from '../server-session'
 import { expandHome, toDbError } from '../session'
 
@@ -178,7 +179,7 @@ export class MysqlSession extends ServerSession<Connection> {
       user: String(row.u),
       currentUser: String(row.cu),
       defaultSchema: (row.db as string) ?? '',
-      ssl: String(ssl[0]?.Value ?? '')
+      ssl: valueText(ssl[0]?.Value)
     }
   }
 
@@ -283,7 +284,7 @@ export class MysqlSession extends ServerSession<Connection> {
         // destroying the socket alone leaves the query running on the server, with its snapshot and locks
         void this.killAuxQuery().finally(() => {
           this.destroy(conn)
-          reject(err)
+          reject(err instanceof Error ? err : new Error(String(err)))
         })
       }
       const flush = (): void => {
@@ -304,7 +305,7 @@ export class MysqlSession extends ServerSession<Connection> {
         rows.push(row as Row)
         if (rows.length >= batch) flush()
       })
-      query.on('error', (err: unknown) => {
+      query.on('error', (err: QueryError) => {
         if (failed) return
         failed = true
         const settle = (): void => reject(err)

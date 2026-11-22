@@ -11,7 +11,7 @@ const props = defineProps<{ value: Cell; column: ColumnInfo; readOnly?: boolean 
 const emit = defineEmits<{ close: [value?: Cell] }>()
 
 const binary = props.value instanceof Uint8Array && props.column.kind !== 'bit'
-const bytes = ref<Uint8Array | null>(binary ? (props.value as Uint8Array) : null)
+const bytes = ref<Uint8Array | null>(binary ? props.value : null)
 const isNull = ref(props.value === null)
 const text = ref(props.value === null ? '' : cellFullText(props.value, props.column))
 const mode = ref<'text' | 'hex'>(binary ? 'hex' : 'text')

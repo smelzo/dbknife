@@ -1,6 +1,7 @@
 import { t } from '@shared/i18n'
 import { backupStatement, restoreStatement } from '@shared/sql/mssql-backup'
 import type { ConnectionConfig, MssqlBackupOptions, MssqlRestoreOptions } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import { forkSession } from '../db/create-session'
 import type { DbSession } from '../db/session'
 import { checkCancelled, report, type Job } from './jobs'
@@ -42,7 +43,7 @@ export async function mssqlRestore(job: Job, session: DbSession, o: MssqlRestore
   // the connection's database, followed after a USE by the auxiliary connection
   const current = await session.query('SELECT DB_NAME() AS db')
   if (current.error) throw new Error(current.error.message)
-  if (String(current.rows[0]?.db ?? '').toLowerCase() === o.database.toLowerCase()) {
+  if (valueText(current.rows[0]?.db).toLowerCase() === o.database.toLowerCase()) {
     throw new Error(t('tools.mssqlRestore.currentDatabase', { database: o.database }))
   }
   report(job, { progress: -1, message: t('tools.mssqlRestore.running', { database: o.database }) })

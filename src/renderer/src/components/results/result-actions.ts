@@ -71,6 +71,7 @@ export async function exportResult(rt: ResultTab): Promise<void> {
 
 /** Opens the value editor; resolves with the new value or undefined when unchanged. */
 export function editValue(rt: ResultTab, row: number, col: number, readOnly: boolean): Promise<Cell | undefined> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- type of a .vue import, not read by typescript-eslint
   return openDialog<Cell>(ValueEditorDialog, {
     value: cellValue(rt, row, col) ?? null,
     column: rt.columns[col],

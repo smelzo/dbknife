@@ -8,7 +8,7 @@ import tseslint from 'typescript-eslint'
 export default defineConfig(
   { ignores: ['out/**', 'dist/**', 'out-*/**', 'helper/**', 'e2e/**', 'site/**'] },
   js.configs.recommended,
-  tseslint.configs.recommended,
+  tseslint.configs.recommendedTypeChecked,
   pluginVue.configs['flat/essential'],
   {
     files: ['**/*.ts', '**/*.vue'],
@@ -37,5 +37,17 @@ export default defineConfig(
       'vue/multi-word-component-names': 'off'
     }
   },
-  { files: ['**/*.{js,mjs,cjs,mts}'], languageOptions: { globals: globals.node } }
+  {
+    // typescript-eslint does not read the types of a component imported from another .vue file
+    // (vue-tsc does, in pnpm typecheck): they come as "error typed", and these rules report them
+    files: ['**/*.vue'],
+    rules: {
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off'
+    }
+  },
+  { files: ['**/*.{js,mjs,cjs,mts}'], extends: [tseslint.configs.disableTypeChecked], languageOptions: { globals: globals.node } }
 )

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import type { Cell } from '@shared/types'
 import type { MenuItemSpec } from '@shared/types'
 import { t } from '@/i18n'
 import { confirmDiscardEdits } from '@/workspace/confirm'
@@ -180,7 +179,7 @@ async function onContext(_e: MouseEvent, r: number, c: number): Promise<void> {
     }
     case 'load': {
       const path = await window.api.files.chooseOpen({ title: t('results.loadValueTitle') })
-      if (path) setCell(props.rt, row, c, (await window.api.files.readBinary(path)) as Cell)
+      if (path) setCell(props.rt, row, c, await window.api.files.readBinary(path))
       break
     }
     case 'save': {

@@ -1,5 +1,6 @@
 import type { Row } from '@shared/types'
 import { mssqlDialect } from '@shared/sql/dialect'
+import { valueText } from '@shared/value-text'
 import type { ColumnMeta, DdlKind, ForeignKeyMeta, IndexMeta, RoutineMeta, SchemaObjects, TableMeta, TriggerMeta } from '../metadata'
 import type { Catalog, Query } from './catalog'
 
@@ -7,8 +8,11 @@ const { quoteIdentifier: q, qualified, quoteString } = mssqlDialect
 
 /** A bit or flag column read as a boolean. */
 export const yes = (v: unknown): boolean => v === true || v === 1 || v === '1' || v === 'true'
-const list = (v: unknown): string[] => (v === null || v === undefined || v === '' ? [] : String(v).split('\u0001'))
-const text = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
+const list = (v: unknown): string[] => {
+  const s = valueText(v)
+  return s === '' ? [] : s.split('\u0001')
+}
+const text = valueText
 
 // Metadata functions such as OBJECT_ID wait for the schema lock of an object created or changed in
 // an open transaction, whatever the isolation level: names are resolved with joins on the catalog
@@ -47,11 +51,11 @@ function typeName(r: Row): string {
       return `${type}(${length === -1 ? 'max' : length / 2})`
     case 'decimal':
     case 'numeric':
-      return `${type}(${r.precision},${r.scale})`
+      return `${type}(${Number(r.precision)},${Number(r.scale)})`
     case 'datetime2':
     case 'datetimeoffset':
     case 'time':
-      return `${type}(${r.scale})`
+      return `${type}(${Number(r.scale)})`
     default:
       return type
   }
@@ -211,10 +215,10 @@ export class MssqlCatalog implements Catalog {
     )
     return rows.map((r) => {
       const type = typeName(r)
-      const identity = r.seed === null || r.seed === undefined ? '' : `IDENTITY(${r.seed},${r.increment})`
-      const computed = r.computed ? `AS ${r.computed}${yes(r.persisted) ? ' PERSISTED' : ''}` : ''
-      const collation = r.collation ? `COLLATE ${r.collation}` : ''
-      const def = r.def === null || r.def === undefined ? null : String(r.def)
+      const identity = r.seed === null || r.seed === undefined ? '' : `IDENTITY(${valueText(r.seed)},${valueText(r.increment)})`
+      const computed = r.computed ? `AS ${valueText(r.computed)}${yes(r.persisted) ? ' PERSISTED' : ''}` : ''
+      const collation = r.collation ? `COLLATE ${valueText(r.collation)}` : ''
+      const def = r.def === null || r.def === undefined ? null : valueText(r.def)
       const nullable = yes(r.nullable)
       const constraint = def !== null && !yes(r.default_system_named) ? ` CONSTRAINT ${q(String(r.default_name))}` : ''
       const ddl = computed

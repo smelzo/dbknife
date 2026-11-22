@@ -28,9 +28,9 @@ export interface StatusModel {
   sections: ComputedRef<{ title: string; rows: InfoRow[] }[]>
   charts: ComputedRef<Chart[]>
   /** Reads the server information, then takes a sample. */
-  loadInfo(): Promise<void>
+  loadInfo: () => Promise<void>
   /** Takes a sample for the charts; called every second. */
-  sample(): Promise<void>
+  sample: () => Promise<void>
 }
 
 /** Appends a sample to a chart series, keeping the last POINTS. */

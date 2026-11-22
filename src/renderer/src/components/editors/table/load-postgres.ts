@@ -1,5 +1,6 @@
 import type { ColumnDef, ForeignKeyDef, IndexDef, TableDef } from '@shared/sql/create-table'
 import { postgresDialect } from '@shared/sql/dialect'
+import { valueText } from '@shared/value-text'
 // from @shared, not @/i18n: the vitest integration tests load this module without the renderer's window.api
 import { t } from '@shared/i18n'
 import type { Query } from '../../../workspace/catalog/catalog'
@@ -14,7 +15,7 @@ import { newColumn } from './model'
 const relation = 'pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = $1 AND c.relname = $2'
 
 const yes = (v: unknown): boolean => v === 'true' || v === true
-const list = (v: unknown): string[] => (v === null || v === undefined || v === '' ? [] : String(v).split('\u0001'))
+const list = (v: unknown): string[] => (v === null || v === undefined || v === '' ? [] : valueText(v).split('\u0001'))
 const actions: Record<string, string> = { a: '', r: 'RESTRICT', c: 'CASCADE', n: 'SET NULL', d: 'SET DEFAULT' }
 
 /** Reads a table into the model; throws when it cannot be edited. */
@@ -80,11 +81,11 @@ export async function loadPostgresTable(query: Query, schema: string, table: str
     ...newColumn(String(r.name), String(r.type)),
     oldName: String(r.name),
     nullable: !yes(r.notnull),
-    default: r.generated === '' && r.def !== null ? String(r.def) : '',
+    default: r.generated === '' && r.def !== null ? valueText(r.def) : '',
     autoIncrement: r.identity === 'a' || r.identity === 'd',
     generated: r.generated === 's' ? { expression: String(r.def), storage: 'STORED' } : null,
     collation: (r.collation as string | null) ?? '',
-    comment: String(r.comment ?? '')
+    comment: valueText(r.comment)
   }))
   if (columnRows.some((r) => r.generated === 'v')) throw new Error(t('tableEditor.load.virtualGenerated'))
 
@@ -104,7 +105,7 @@ export async function loadPostgresTable(query: Query, schema: string, table: str
       constraint: yes(r.is_constraint),
       columns: list(r.columns_).map((name, i) => ({ name, length: null, desc: descending[i] === '1' })),
       using: r.method === 'btree' ? '' : String(r.method),
-      comment: yes(r.is_constraint) ? '' : String(r.comment ?? ''),
+      comment: yes(r.is_constraint) ? '' : valueText(r.comment),
       extra: ''
     })
   }
@@ -138,8 +139,8 @@ export async function loadPostgresTable(query: Query, schema: string, table: str
       collation: '',
       rowFormat: '',
       autoIncrement: '',
-      comment: String(rel.comment ?? ''),
-      other: rel.options ? `WITH (${String(rel.options)})` : '',
+      comment: valueText(rel.comment),
+      other: rel.options ? `WITH (${valueText(rel.options)})` : '',
       partition: (rel.partition_key as string | null) ?? ''
     }
   }

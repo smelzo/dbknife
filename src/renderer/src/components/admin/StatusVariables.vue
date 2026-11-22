@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ClipboardCopy, Copy, RefreshCw } from 'lucide-vue-next'
 import { quoteString } from '@shared/sql/quote'
+import { valueText } from '@shared/value-text'
 import type { Workspace } from '@/workspace/workspace'
 import { alertError, promptText } from '@/dialogs'
 import { metadataQuery } from '@/workspace/catalog/mssql'
@@ -116,11 +117,11 @@ const postgresSource: Source = {
     const views = await Promise.all(statViews.map(([, , sql]) => props.ws.query(sql).catch(() => [])))
     statViews.forEach(([category, prefix], i) => {
       for (const [col, v] of Object.entries(views[i][0] ?? {})) {
-        if (!['datid', 'datname'].includes(col)) status.push([`${prefix}.${col}`, v === null ? '' : String(v), category])
+        if (!['datid', 'datname'].includes(col)) status.push([`${prefix}.${col}`, valueText(v), category])
       }
     })
     const settings = await props.ws.query(`SELECT name, current_setting(name) AS value, category FROM pg_settings ORDER BY name`)
-    return { status, system: settings.map((r) => [String(r.name), String(r.value ?? ''), String(r.category)]) }
+    return { status, system: settings.map((r) => [String(r.name), valueText(r.value), String(r.category)]) }
   },
   async set(name, value) {
     const [row] = await props.ws.query('SELECT context FROM pg_settings WHERE name = $1', [name])
@@ -170,17 +171,17 @@ const mssqlSource: Source = {
         FROM sys.configurations ORDER BY name`)
     ])
     const category = t('admin.variables.categorySystemFunctions')
-    const status: Variable[] = serverFunctions.map((f) => [`@@${f}`, String(functions?.[f] ?? ''), category])
+    const status: Variable[] = serverFunctions.map((f) => [`@@${f}`, valueText(functions?.[f]), category])
     for (const r of counters) {
       // "SQLServer:Buffer Manager", "MSSQL$SQLEXPRESS:Buffer Manager"
       const object = String(r.object).replace(/^[^:]*:/, '')
-      status.push([r.instance ? `${r.counter} [${r.instance}]` : String(r.counter), String(r.value), object])
+      status.push([r.instance ? `${valueText(r.counter)} [${valueText(r.instance)}]` : String(r.counter), String(r.value), object])
     }
     const system = options.map((r): Variable => [
       String(r.name),
-      String(r.value ?? ''),
+      valueText(r.value),
       r.is_advanced ? t('admin.variables.categoryAdvanced') : t('admin.variables.categoryBasic'),
-      [String(r.value_in_use ?? ''), String(r.minimum ?? ''), String(r.maximum ?? ''), yesNo(r.is_dynamic), yesNo(r.is_advanced), String(r.description ?? '')]
+      [valueText(r.value_in_use), valueText(r.minimum), valueText(r.maximum), yesNo(r.is_dynamic), yesNo(r.is_advanced), valueText(r.description)]
     ])
     return { status, system }
   },

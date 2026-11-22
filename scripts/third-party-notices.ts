@@ -17,7 +17,7 @@ interface PackageJson {
   optionalDependencies?: Record<string, string>
 }
 
-const readPackage = (dir: string): PackageJson => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+const readPackage = (dir: string): PackageJson => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as PackageJson
 
 /** Root directory of the package a bundled module belongs to, from its path. */
 function packageRoot(id: string): string | undefined {

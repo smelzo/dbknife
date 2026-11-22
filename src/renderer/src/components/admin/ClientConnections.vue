@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { RefreshCw } from 'lucide-vue-next'
 import type { Row } from '@shared/types'
+import { valueText } from '@shared/value-text'
 import type { Workspace } from '@/workspace/workspace'
 import { alertError, confirm } from '@/dialogs'
 import { t } from '@/i18n'
@@ -69,7 +70,7 @@ const selectedKey = ref<number | null>(null)
 let auxId: number | null = null
 
 const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v))
-const str = (v: unknown): string | null => (v === null || v === undefined ? null : String(v))
+const str = (v: unknown): string | null => (v === null || v === undefined ? null : valueText(v))
 const key = (c: Connection): number | null => c.threadId ?? c.id
 
 // --- MySQL -----------------------------------------------------------------------------
@@ -190,11 +191,11 @@ const activitySql = `SELECT pid, usename, client_addr::text AS client_addr, clie
 const fromActivityRow = (r: Row): Connection => ({
   id: num(r.pid),
   user: str(r.usename),
-  host: r.client_addr === null ? (r.backend_type === 'client backend' ? 'local' : null) : `${r.client_hostname ?? r.client_addr}:${r.client_port}`,
+  host: r.client_addr === null ? (r.backend_type === 'client backend' ? 'local' : null) : `${valueText(r.client_hostname ?? r.client_addr)}:${valueText(r.client_port)}`,
   db: str(r.datname),
   command: str(r.state),
   time: num(r.seconds),
-  state: r.wait_event ? `${r.wait_event_type}: ${r.wait_event}` : null,
+  state: r.wait_event ? `${valueText(r.wait_event_type)}: ${valueText(r.wait_event)}` : null,
   threadId: null,
   type: String(r.backend_type),
   name: str(r.application_name),
@@ -261,7 +262,7 @@ const sessionsSql = `SELECT s.session_id, s.login_name, s.host_name, s.program_n
 const fromSessionRow = (r: Row): Connection => ({
   id: num(r.session_id),
   user: str(r.login_name),
-  host: r.client_net_address === null ? str(r.host_name) : `${r.host_name ?? r.client_net_address}${r.client_tcp_port === null ? '' : `:${r.client_tcp_port}`}`,
+  host: r.client_net_address === null ? str(r.host_name) : `${valueText(r.host_name ?? r.client_net_address)}${r.client_tcp_port === null ? '' : `:${valueText(r.client_tcp_port)}`}`,
   db: str(r.db),
   command: str(r.command),
   time: num(r.seconds),
@@ -271,7 +272,7 @@ const fromSessionRow = (r: Row): Connection => ({
   name: str(r.program_name),
   info: str(r.query),
   sleeping: r.status === 'sleeping',
-  wait: r.wait_type ? `${r.wait_type} (${r.wait_time} ms)` : null,
+  wait: r.wait_type ? `${valueText(r.wait_type)} (${valueText(r.wait_time)} ms)` : null,
   // 0: not blocked
   blockedBy: num(r.blocking_session_id) || null
 })
@@ -392,7 +393,8 @@ const detailRows = computed<[string, string][]>(() => {
 // --- kill ----------------------------------------------------------------------------------
 
 async function kill(what: 'QUERY' | 'CONNECTION'): Promise<void> {
-  const rows = (grid.value?.selectedRows() ?? []).map((r) => view.value[r]).filter((c) => c?.id !== null)
+  const rowIndexes: number[] = grid.value?.selectedRows() ?? []
+  const rows = rowIndexes.map((r) => view.value[r]).filter((c) => c?.id !== null)
   let ids = [...new Set(rows.map((c) => c.id!))]
   if (!source.killsItself && auxId !== null && ids.includes(auxId)) {
     ids = ids.filter((id) => id !== auxId)

@@ -9,6 +9,7 @@ import type { Cell, DbError, ExecResult, QueryResult, Row } from '@shared/types'
 import { statementKind } from '@shared/sql/analyze'
 import { sqliteRules } from '@shared/sql/lexer'
 import { opensTransaction } from '@shared/sql/transaction'
+import { valueText } from '@shared/value-text'
 import { dmlKinds, toCell, toColumnInfo, type SqliteColumn } from './sqlite-columns'
 
 export type SqliteRequest =
@@ -68,8 +69,7 @@ function exportCsv(file: string, table: string, format: CsvFormat): void {
   const stmt = db!.prepare(`SELECT * FROM ${quote(table)}`)
   stmt.setReturnArrays(true)
   stmt.setReadBigInts(true)
-  const text = (v: unknown): string | null =>
-    v === null ? null : v instanceof Uint8Array ? new TextDecoder().decode(v) : String(v)
+  const text = (v: unknown): string | null => (v === null ? null : valueText(v))
   const rows = (stmt.all() as unknown as unknown[][]).map((r) => r.map(text))
   const content = writeCsv(
     stmt.columns().map((c) => c.name),

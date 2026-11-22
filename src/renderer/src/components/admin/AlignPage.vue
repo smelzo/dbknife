@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ArrowRight, Check, Copy, Plus, X } from 'lucide-vue-next'
+import { ArrowRight, Check, CircleQuestionMark, Copy, Plus, X } from 'lucide-vue-next'
 import type { AlignEnd, Alignment } from '@shared/types'
 import type { Workspace } from '@/workspace/workspace'
 import { alertError, confirm } from '@/dialogs'
@@ -53,6 +53,14 @@ const showCommand = !navigator.userAgent.includes('Windows')
 const shellQuote = (s: string): string => `'${s.replaceAll("'", "'\\''")}'`
 const command = (a: Alignment): string => `dbknife --runjob ${shellQuote(a.name)}`
 const copyCommand = (a: Alignment): Promise<void> => navigator.clipboard.writeText(command(a))
+/** How to get the command in the PATH: the menu item on macOS, the .deb or a link to the AppImage on Linux. */
+const commandHelp = (): Promise<number> =>
+  window.api.ui.message({
+    type: 'info',
+    message: t('admin.align.commandHelpTitle'),
+    detail: t(navigator.userAgent.includes('Macintosh') ? 'admin.align.commandHelpMac' : 'admin.align.commandHelpLinux'),
+    buttons: [t('common.ok')]
+  })
 
 function edit(draft: Partial<Alignment>, compare = false): void {
   // a copy without the reactive proxies: the editor must not change the list
@@ -238,6 +246,7 @@ onUnmounted(closeRunSessions)
           <div class="command">
             <code class="selectable">{{ command(selected) }}</code>
             <button class="icon-btn" :title="t('admin.align.copyCommand')" @click="copyCommand(selected)"><Copy :size="14" /></button>
+            <button class="icon-btn" :title="t('admin.align.commandHelp')" @click="commandHelp"><CircleQuestionMark :size="14" /></button>
           </div>
           <p class="hint muted">{{ t('admin.align.commandHint') }}</p>
         </section>

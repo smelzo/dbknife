@@ -1,5 +1,6 @@
 import { app, autoUpdater, BrowserWindow, nativeTheme, screen, systemPreferences } from 'electron'
 import { join } from 'node:path'
+import { isCliRun, runCli } from './cli'
 import { loadLanguage } from './i18n'
 import { buildMenu } from './menu'
 import { guardClose, initCloseGuard } from './close-guard'
@@ -12,6 +13,9 @@ import { startUpdater } from './updater'
 app.setName('DBKnife')
 // isolated profile for automated tests
 if (process.env.DBM_USER_DATA) app.setPath('userData', process.env.DBM_USER_DATA)
+// `dbknife --runjob <name>`: a saved alignment run from the terminal, without a window
+const cli = isCliRun()
+if (cli && process.platform === 'darwin') app.setActivationPolicy('accessory')
 // on large Retina displays the GPU process allocates hundreds of MB of Metal buffers while drawing
 if (!getSettings().hardwareAcceleration) app.commandLine.appendSwitch('disable-gpu-compositing')
 // automated tests run in the background: no Dock icon, no focus stealing, transparent window
@@ -74,7 +78,19 @@ function createWindow(): void {
   } else void win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+/** Exits once stdout and stderr are written: towards a pipe they are asynchronous on macOS, and app.exit() would cut them. */
+const flushAndExit = (code: number): void => void process.stdout.write('', () => process.stderr.write('', () => app.exit(code)))
+
 void app.whenReady().then(() => {
+  if (cli) {
+    loadLanguage()
+    initSecrets()
+    runCli().then(flushAndExit, (err: unknown) => {
+      process.stderr.write(`${(err as Error).message}\n`)
+      flushAndExit(1)
+    })
+    return
+  }
   // in dev the app runs inside node_modules' Electron.app, whose name, version and icon macOS would show
   if (process.env.ELECTRON_RENDERER_URL && process.platform === 'darwin') {
     app.setAboutPanelOptions({ applicationName: app.name, applicationVersion: app.getVersion(), version: '' })
@@ -95,7 +111,7 @@ void app.whenReady().then(() => {
   })
 })
 
-initOpenFiles(createWindow)
+if (!cli) initOpenFiles(createWindow)
 
 app.on('window-all-closed', () => {
   closeAllSessions()

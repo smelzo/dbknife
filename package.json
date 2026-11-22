@@ -1,7 +1,7 @@
 {
   "name": "dbknife",
   "productName": "DBKnife",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "description": "SQL editor and database administration tool for MySQL/MariaDB, PostgreSQL, SQL Server and SQLite",
   "homepage": "https://dbknife.com",
   "desktopName": "dbknife.desktop",

@@ -243,7 +243,7 @@ function onContext(e: MouseEvent, r: number, c: number): void {
 }
 
 function onDblClick(r: number, c: number): void {
-  if (props.editable) startEdit(r, c)
+  if (props.editable) void startEdit(r, c)
   else emit('activate', r, c)
 }
 

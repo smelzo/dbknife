@@ -74,7 +74,7 @@ function createWindow(): void {
   } else void win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-app.whenReady().then(() => {
+void app.whenReady().then(() => {
   // in dev the app runs inside node_modules' Electron.app, whose name, version and icon macOS would show
   if (process.env.ELECTRON_RENDERER_URL && process.platform === 'darwin') {
     app.setAboutPanelOptions({ applicationName: app.name, applicationVersion: app.getVersion(), version: '' })

@@ -183,9 +183,10 @@ export const useApp = defineStore('app', () => {
       (unsaved) => window.api.app.setUnsaved(unsaved),
       { immediate: true }
     )
-    window.api.app.onCloseRequest(async () => {
+    const onCloseRequest = async (): Promise<void> => {
       if (await confirmUnsaved()) window.api.app.closeConfirmed()
-    })
+    }
+    window.api.app.onCloseRequest(() => void onCloseRequest())
   }
 
   /** Asks about the work closing loses in every connection tab (Workspace.confirmClose); false when the user cancels. */

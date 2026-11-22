@@ -147,21 +147,24 @@ export function initSecrets(): void {
   if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text') safeStorage.setUsePlainTextEncryption(true)
 }
 
-export function getSecret(id: string, kind: SecretKind): string | undefined {
+export async function getSecret(id: string, kind: SecretKind): Promise<string | undefined> {
   const value = readSecrets()[id]?.[kind]
-  if (!value || !safeStorage.isEncryptionAvailable()) return undefined
+  if (!value || !(await safeStorage.isAsyncEncryptionAvailable())) return undefined
   try {
-    return safeStorage.decryptString(Buffer.from(value, 'base64'))
+    const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(Buffer.from(value, 'base64'))
+    // the key has been rotated, or one of a better security level is available
+    if (shouldReEncrypt) await setSecret(id, kind, result)
+    return result
   } catch {
     return undefined
   }
 }
 
-export function setSecret(id: string, kind: SecretKind, value: string): boolean {
-  if (!safeStorage.isEncryptionAvailable()) return false
+export async function setSecret(id: string, kind: SecretKind, value: string): Promise<boolean> {
+  if (!(await safeStorage.isAsyncEncryptionAvailable())) return false
   let encrypted: string
   try {
-    encrypted = safeStorage.encryptString(value).toString('base64')
+    encrypted = (await safeStorage.encryptStringAsync(value)).toString('base64')
   } catch {
     // macOS: access to the Keychain denied
     return false

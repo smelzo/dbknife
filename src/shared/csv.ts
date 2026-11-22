@@ -51,7 +51,7 @@ export function parseCsv(text: string, delimiter: string): string[][] {
   let i = 0
   while (i < n) {
     const record: string[] = []
-    let quoted = false
+    let quoted: boolean
     for (;;) {
       let field = ''
       quoted = text[i] === '"'

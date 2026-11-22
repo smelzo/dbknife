@@ -166,10 +166,10 @@ export function installCommands(homeActions: { newConnection: () => void }): voi
         ws.openAdmin('import')
         break
       case 'edit.find':
-        editor?.getAction('actions.find')?.run()
+        void editor?.getAction('actions.find')?.run()
         break
       case 'edit.replace':
-        editor?.getAction('editor.action.startFindReplaceAction')?.run()
+        void editor?.getAction('editor.action.startFindReplaceAction')?.run()
         break
       case 'edit.beautify':
         if (editor) beautify(editor, ws.dialect, ws.info)
@@ -179,10 +179,10 @@ export function installCommands(homeActions: { newConnection: () => void }): voi
         if (editor) changeKeywordCase(editor, ws.dialect, command === 'edit.upcase')
         break
       case 'edit.comment':
-        editor?.getAction('editor.action.commentLine')?.run()
+        void editor?.getAction('editor.action.commentLine')?.run()
         break
       case 'edit.autocomplete':
-        editor?.getAction('editor.action.triggerSuggest')?.run()
+        void editor?.getAction('editor.action.triggerSuggest')?.run()
         break
       case 'view.toggleSidebar':
         ws.sidebarVisible = !ws.sidebarVisible

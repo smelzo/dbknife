@@ -54,14 +54,14 @@ export function closeAllSessions(): void {
 }
 
 /** SSH password and passphrase: the supplied ones, else those saved under `id` (a connection's, or a channel's). */
-const sshSecrets = (id: string, creds: Credentials): SessionSecrets => ({
-  sshPassword: creds.sshPassword ?? store.getSecret(id, 'ssh'),
-  sshPassphrase: creds.sshPassphrase ?? store.getSecret(id, 'sshPassphrase')
+const sshSecrets = async (id: string, creds: Credentials): Promise<SessionSecrets> => ({
+  sshPassword: creds.sshPassword ?? (await store.getSecret(id, 'ssh')),
+  sshPassphrase: creds.sshPassphrase ?? (await store.getSecret(id, 'sshPassphrase'))
 })
 
-function saveSshSecrets(id: string, creds: Credentials): void {
-  if (creds.sshPassword !== undefined) store.setSecret(id, 'ssh', creds.sshPassword)
-  if (creds.sshPassphrase !== undefined) store.setSecret(id, 'sshPassphrase', creds.sshPassphrase)
+async function saveSshSecrets(id: string, creds: Credentials): Promise<void> {
+  if (creds.sshPassword !== undefined) await store.setSecret(id, 'ssh', creds.sshPassword)
+  if (creds.sshPassphrase !== undefined) await store.setSecret(id, 'sshPassphrase', creds.sshPassphrase)
 }
 
 /** The secret the SSH server asks for or has rejected, for the renderer to prompt for it. */
@@ -79,12 +79,12 @@ async function useChannel(
 ): Promise<ChannelResult> {
   let done: Pick<ChannelResult, 'browseId'>
   try {
-    done = await action(sshSecrets(channel.id, creds))
+    done = await action(await sshSecrets(channel.id, creds))
   } catch (err) {
     if (err instanceof SshError) return { ok: false, error: { message: err.message }, needs: sshNeeds(err) }
     return { ok: false, error: toDbError(err) }
   }
-  if (creds.save) saveSshSecrets(channel.id, creds)
+  if (creds.save) await saveSshSecrets(channel.id, creds)
   return { ok: true, ...done }
 }
 
@@ -114,15 +114,15 @@ function restartApp(): void {
  */
 async function openSession(config: ConnectionConfig, creds: Credentials): Promise<{ result: OpenSessionResult; session?: DbSession }> {
   const id = config.id
-  let password = creds.password ?? store.getSecret(id, 'password')
+  let password = creds.password ?? (await store.getSecret(id, 'password'))
   if (password === undefined && config.workbenchKeychain) {
     password = await readWorkbenchPassword(config.workbenchKeychain, config.user)
-    if (password !== undefined) store.setSecret(id, 'password', password)
+    if (password !== undefined) await store.setSecret(id, 'password', password)
   }
   if (password === undefined && usesPassword(config.engine)) return { result: { ok: false, needs: 'password' } }
   // a channel is shared by connections: its SSH secrets are those of the channel
   const sshId = channelId(config) ?? id
-  const secrets = { password, ...sshSecrets(sshId, creds) }
+  const secrets = { password, ...(await sshSecrets(sshId, creds)) }
   let session: DbSession | undefined
   try {
     session = createSession(config, secrets, store.getSettings().safeUpdates)
@@ -133,8 +133,8 @@ async function openSession(config: ConnectionConfig, creds: Credentials): Promis
     return { result: { ok: false, error, needs: isAuthError(config.engine, error) ? 'password' : undefined } }
   }
   if (creds.save) {
-    if (creds.password !== undefined) store.setSecret(id, 'password', creds.password)
-    saveSshSecrets(sshId, creds)
+    if (creds.password !== undefined) await store.setSecret(id, 'password', creds.password)
+    await saveSshSecrets(sshId, creds)
   }
   return { result: { ok: true, sessionId: session.id, info: session.info }, session }
 }

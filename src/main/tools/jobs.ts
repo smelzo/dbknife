@@ -43,7 +43,7 @@ export function checkCancelled(job: Job): void {
 export function startJob(sender: WebContents, work: (job: Job) => Promise<string>): string {
   const job: Job = { id: randomUUID(), sender, children: new Set(), cancelers: new Set(), cancelled: false, progress: 0 }
   jobs.set(job.id, job)
-  setImmediate(async () => {
+  const run = async (): Promise<void> => {
     try {
       const message = await work(job)
       report(job, { progress: 1, message, log: message, done: true })
@@ -54,7 +54,8 @@ export function startJob(sender: WebContents, work: (job: Job) => Promise<string
     } finally {
       jobs.delete(job.id)
     }
-  })
+  }
+  setImmediate(() => void run())
   return job.id
 }
 

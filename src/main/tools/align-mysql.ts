@@ -170,7 +170,7 @@ async function openPinned(session: DbSession): Promise<MysqlSession> {
   try {
     return (await forkSession(session, {}, { pinned: true })) as MysqlSession
   } catch (err) {
-    throw new Error(t('tools.align.openFailed', { connection: session.config.name, error: (err as Error).message }))
+    throw new Error(t('tools.align.openFailed', { connection: session.config.name, error: (err as Error).message }), { cause: err })
   }
 }
 
@@ -908,7 +908,7 @@ async function takeInventory(ctx: Context, items: Item[], inv: Inventory): Promi
     const error = job.cancelled ? t('tools.cancelled') : (err as Error).message
     const message = t('tools.align.backupsLeft', { error, tables: left.join(', ') })
     if (job.cancelled) job.cancelledMessage = message
-    throw new Error(message)
+    throw new Error(message, { cause: err })
   }
 }
 
@@ -938,7 +938,7 @@ async function runSteps(ctx: Context, inv: Inventory, steps: PlanStep[]): Promis
     try {
       await exec(ctx.writer.session, step.sql)
     } catch (err) {
-      throw new Error(t('tools.copy.stepFailed', { object: step.object || step.sql, error: (err as Error).message }))
+      throw new Error(t('tools.copy.stepFailed', { object: step.object || step.sql, error: (err as Error).message }), { cause: err })
     }
     if (alter) inv.collationAltered = alter[1].toLowerCase() !== inv.collation.toLowerCase()
   }
@@ -1039,7 +1039,7 @@ async function writeTarget(ctx: Context, items: Item[], inv: Inventory, st: Appl
         continue
       } catch (err) {
         if (errno(err) !== 1062) throw err
-        if (!r.options.deleteRows) throw new Error(t('tools.align.uniqueConflict', { table: item.target!.name, key: duplicateKey((err as Error).message) }))
+        if (!r.options.deleteRows) throw new Error(t('tools.align.uniqueConflict', { table: item.target!.name, key: duplicateKey((err as Error).message) }), { cause: err })
         // values of UNIQUE keys exchanged between rows: the table is written again as a whole
         await exec(writer.session, 'ROLLBACK TO SAVEPOINT dbm_t')
         report(job, { log: t('tools.align.uniqueRewrite', { table: item.target!.name }) })
@@ -1097,7 +1097,7 @@ async function recover(ctx: Context, inv: Inventory, session: DbSession, committ
       report(ctx.job, { log: t('tools.align.restoreFailed', { object: object || sql, error: (err as Error).message }) })
     }
   }
-  let objects: SourceObject[] = []
+  let objects: SourceObject[]
   if (committed) {
     const present = await select(
       session,

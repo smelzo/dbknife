@@ -110,7 +110,7 @@ const request = (objects: AlignObjectRef[] | null, drop: AlignObjectRef[]): Alig
   options: { ...options }
 })
 
-async function compare(): Promise<void> {
+async function runCompare(): Promise<void> {
   if (!ready.value || busy.value) return
   shown.value = 'compare'
   const at = basis.value
@@ -244,7 +244,7 @@ defineExpose({ busy })
 
 onMounted(async () => {
   await Promise.all([choose(source, source.connectionId), choose(target, target.connectionId)])
-  if (props.compare) await compare()
+  if (props.compare) await runCompare()
 })
 
 onUnmounted(() => {
@@ -288,7 +288,7 @@ onUnmounted(() => {
           <option value="remove">{{ t('admin.copy.removeDefiners') }}</option>
         </select>
         <span class="spacer" />
-        <button class="primary" :disabled="!ready || busy" @click="compare">{{ preview ? t('admin.align.compareAgain') : t('admin.align.compare') }}</button>
+        <button class="primary" :disabled="!ready || busy" @click="runCompare">{{ preview ? t('admin.align.compareAgain') : t('admin.align.compare') }}</button>
       </div>
     </div>
 

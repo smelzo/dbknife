@@ -21,6 +21,7 @@ const escapes: Record<string, string> = {
 
 /** Single-quoted string literal with MySQL escapes. */
 export const quoteString = (value: string): string =>
+  // eslint-disable-next-line no-control-regex -- \x1a (Ctrl-Z) is one of the characters MySQL escapes
   "'" + value.replace(/[\0\b\t\n\r\x1a'\\]/g, (c) => escapes[c]) + "'"
 
 export const toHex = (bytes: Uint8Array): string => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')

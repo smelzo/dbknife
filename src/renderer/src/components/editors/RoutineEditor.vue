@@ -21,7 +21,6 @@ const error = ref('')
 const eol = (s: string): string => s.replace(/\r\n?/g, '\n')
 watch(
   () => eol(text.value) !== eol(loaded.value),
-  // eslint-disable-next-line vue/no-mutating-props
   (dirty) => (props.tab.dirty = dirty),
   { immediate: true }
 )
@@ -165,10 +164,8 @@ async function apply(): Promise<void> {
   if (restore) script.push(restore)
   // T-SQL: the DROP of a renamed module and the new one's CREATE are undone together
   if (await reviewAndApply(props.ws, d.engine === 'mssql' ? inTransaction(script, 'BEGIN TRANSACTION') : script)) {
-    /* eslint-disable vue/no-mutating-props */
     props.tab.name = newName
     props.tab.title = t(routineTitles[kind.value], { name: newName })
-    /* eslint-enable vue/no-mutating-props */
     props.ws.meta.invalidate(props.tab.schema)
     void props.ws.meta.loadObjects(props.tab.schema)
     await load()

@@ -65,7 +65,6 @@ const dirty = computed(() =>
     ? statements.value.length > 0 || !!script.value.refusal
     : JSON.stringify(model.value) !== JSON.stringify(engine.value.newTable())
 )
-// eslint-disable-next-line vue/no-mutating-props
 watch(dirty, (d) => (props.tab.dirty = d), { immediate: true })
 
 async function loadLists(): Promise<void> {
@@ -146,10 +145,8 @@ async function apply(): Promise<void> {
     }
     return
   }
-  /* eslint-disable vue/no-mutating-props */
   props.tab.table = model.value.name
   props.tab.title = t('workspace.tab.table', { name: model.value.name })
-  /* eslint-enable vue/no-mutating-props */
   await load()
   notice.value = (await engine.value.afterApply?.(props.ws, schema, model.value.name).catch(() => '')) ?? ''
 }

@@ -54,7 +54,6 @@ watch(
 onBeforeUnmount(() => clearInterval(ticker))
 
 function onReady(editor: monaco.editor.IStandaloneCodeEditor): void {
-  // eslint-disable-next-line vue/no-mutating-props
   props.tab.editor = editor
   registerModelOwner(props.tab.model, props.ws)
   const { KeyMod, KeyCode } = monaco

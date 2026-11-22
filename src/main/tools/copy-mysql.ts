@@ -271,7 +271,7 @@ export async function copyDatabase(job: Job, source: DbSession, o: CopyOptions, 
         await execute(plan.finish)
       } catch (err) {
         if (job.cancelled) throw err
-        throw new Error(t('tools.copy.targetIncomplete', { error: (err as Error).message }))
+        throw new Error(t('tools.copy.targetIncomplete', { error: (err as Error).message }), { cause: err })
       }
       return t('tools.copy.done', { count: o.schemas.length, target: writer.config.name })
     }

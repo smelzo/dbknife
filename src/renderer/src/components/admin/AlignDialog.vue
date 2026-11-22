@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import type { AlignKind, AlignObjectRef, AlignOptions, Alignment } from '@shared/types'
+import { tableTypeKinds } from '@shared/sql/copy-plan'
+import type { AlignKind, AlignObjectRef, AlignOptions } from '@shared/types'
 import type { MessageKey } from '@shared/i18n'
 import type { Workspace } from '@/workspace/workspace'
-import { alertError, promptText } from '@/dialogs'
+import { alertError } from '@/dialogs'
 import { t } from '@/i18n'
-import { environmentLabel, useApp } from '@/stores/app'
+import { environmentLabel } from '@/stores/app'
 import Modal from '../common/Modal.vue'
-import { alignConnection, openSessionFor, type AlignSession } from './align-sessions'
+import { alignConnection, alignConnections, alignSide, chooseSide, closeSide, defaultAlignOptions, saveNewAlignment, type AlignmentFields } from './align-sessions'
 import { noteText, runAlignment } from './align-run'
 import { useToolJob } from './tool-job'
 
@@ -18,7 +19,6 @@ import { useToolJob } from './tool-job'
  */
 const props = defineProps<{ ws: Workspace; schema: string; table: string }>()
 const emit = defineEmits<{ close: [] }>()
-const app = useApp()
 
 // --- objects of the source ------------------------------------------------------
 
@@ -32,8 +32,6 @@ const groupLabels: Record<AlignKind, MessageKey> = {
   trigger: 'schemaTree.triggers',
   event: 'admin.copy.events'
 }
-/** TABLE_TYPE of the objects the alignment knows, as the main reads them. */
-const relationKinds: Record<string, AlignKind | undefined> = { 'BASE TABLE': 'table', VIEW: 'view', SEQUENCE: 'sequence' }
 
 const objects = ref<AlignObjectRef[]>([])
 const loading = ref(true)
@@ -65,7 +63,7 @@ async function loadObjects(): Promise<void> {
   try {
     const list: AlignObjectRef[] = []
     for (const r of await read('SELECT TABLE_NAME AS name, TABLE_TYPE AS type FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME')) {
-      const kind = relationKinds[r.type]
+      const kind = tableTypeKinds[r.type]
       if (kind) list.push({ kind, name: r.name })
     }
     for (const r of await read('SELECT ROUTINE_NAME AS name, ROUTINE_TYPE AS type FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ? ORDER BY ROUTINE_NAME')) {
@@ -84,47 +82,29 @@ async function loadObjects(): Promise<void> {
 
 // --- target and options -------------------------------------------------------------
 
-/** The workspace's connection first, then the other MySQL/MariaDB ones. */
-const connections = computed(() => [props.ws.config, ...app.connections.filter((c) => c.engine === 'mysql' && c.id !== props.ws.config.id)])
-const target = reactive({ connectionId: '', schema: '', schemas: [] as string[], session: undefined as AlignSession | undefined })
-/** Number of the latest choice: a session still opening for an earlier one is closed when it arrives. */
-let opening = 0
-let unmounted = false
+const connections = computed(() => alignConnections(props.ws))
+const target = alignSide(props.ws)
 const targetConfig = computed(() => alignConnection(props.ws, target.connectionId))
+// the source schema is not a target of itself
+const chooseTarget = (connectionId: string): Promise<void> =>
+  chooseSide(props.ws, target, connectionId, (schema) => connectionId === props.ws.config.id && schema === props.schema)
 
-async function chooseTarget(connectionId: string): Promise<void> {
-  const n = ++opening
-  target.session?.close()
-  Object.assign(target, { connectionId, schema: '', schemas: [], session: undefined })
-  if (!connectionId) return
-  const s = await openSessionFor(props.ws, connectionId)
-  if (n !== opening || unmounted) return s?.close()
-  if (!s) {
-    target.connectionId = ''
-    return
-  }
-  target.session = s
-  const r = await window.api.db.query(s.sessionId, 'SELECT SCHEMA_NAME AS s FROM information_schema.SCHEMATA ORDER BY SCHEMA_NAME')
-  if (n !== opening) return
-  if (r.error) await alertError(t('admin.align.schemasFailed', { name: targetConfig.value?.name ?? '' }), r.error.message)
-  // the source schema is not a target of itself
-  const same = connectionId === props.ws.config.id
-  target.schemas = r.error ? [] : r.rows.map((x) => String(x.s)).filter((x) => !props.ws.dialect.isSystemSchema(x) && !(same && x === props.schema))
-}
-
-const options = reactive<AlignOptions>({ structure: true, data: true, deleteRows: false, definers: 'keep', backup: true })
+const options = reactive<AlignOptions>({ ...defaultAlignOptions })
 
 // --- align, save, compare -----------------------------------------------------------
 
 const tool = useToolJob()
 const { job } = tool
 const logEl = ref<HTMLElement>()
-const savedAs = ref('')
+/** The alignment Save As wrote, with what it holds: Align records its run there while nothing changed. */
+const saved = ref<{ id: string; name: string; fields: string }>()
+/** The status line tells about Save As until the next Align. */
+const showSaved = ref(false)
 
 const complete = computed(() => !!target.session && !!target.schema && chosen.value.length > 0)
 const canAlign = computed(() => complete.value && (options.structure || options.data) && !job.running)
 
-const draft = (): Partial<Alignment> => ({
+const fields = (): AlignmentFields => ({
   source: { connectionId: props.ws.config.id, schema: props.schema },
   target: { connectionId: target.connectionId, schema: target.schema },
   objects: chosen.value,
@@ -139,21 +119,23 @@ const summary = computed(() =>
 )
 /** The running job, else the latest of Save As and the job's outcome. */
 const statusText = computed(() => {
-  if (!job.running && savedAs.value) return t('admin.align.dialog.saved', { name: savedAs.value })
+  if (!job.running && showSaved.value && saved.value) return t('admin.align.dialog.saved', { name: saved.value.name })
   return job.message || t('admin.align.dialog.pressAlign')
 })
 
 async function align(): Promise<void> {
   if (!canAlign.value) return
-  savedAs.value = ''
+  showSaved.value = false
+  const f = fields()
   await runAlignment(
     props.ws,
     {
       source: { sessionId: props.ws.sessionId, schema: props.schema },
       target: { sessionId: target.session!.sessionId, schema: target.schema },
-      objects: chosen.value,
-      drop: [],
-      options: { ...options }
+      objects: f.objects,
+      drop: f.drop,
+      options: f.options,
+      alignmentId: saved.value?.fields === JSON.stringify(f) ? saved.value.id : undefined
     },
     target.connectionId,
     tool
@@ -161,20 +143,15 @@ async function align(): Promise<void> {
 }
 
 async function saveAs(): Promise<void> {
-  const typed = await promptText(t('admin.align.saveTitle'), t('admin.align.name'), t('admin.align.defaultName', { source: props.schema, target: target.schema }))
-  const name = typed?.trim()
-  if (!name) return
-  const alignment = { ...draft(), id: crypto.randomUUID(), name, runs: [] } as Alignment
-  try {
-    await window.api.alignments.save(alignment)
-    savedAs.value = name
-  } catch (err) {
-    await alertError(t('admin.align.saveFailed', { name }), (err as Error).message)
-  }
+  const f = fields()
+  const a = await saveNewAlignment(f)
+  if (!a) return
+  saved.value = { id: a.id, name: a.name, fields: JSON.stringify(f) }
+  showSaved.value = true
 }
 
 function compare(): void {
-  const d = draft()
+  const d = fields()
   emit('close')
   props.ws.openAdmin('align', undefined, d)
 }
@@ -187,11 +164,7 @@ watch(
 onMounted(() => Promise.all([loadObjects(), chooseTarget(props.ws.config.id)]))
 
 // a job already started goes on in the main, on sessions of its own
-onUnmounted(() => {
-  unmounted = true
-  opening++
-  target.session?.close()
-})
+onUnmounted(() => closeSide(target))
 </script>
 
 <template>

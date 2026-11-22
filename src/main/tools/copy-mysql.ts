@@ -1,7 +1,7 @@
 import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { t } from '@shared/i18n'
-import { buildCopyPlan, type CopyKind, type PlanInput, type PlanStep, type PlanWarning, type SourceObject } from '@shared/sql/copy-plan'
+import { buildCopyPlan, tableTypeKinds, type CopyKind, type PlanInput, type PlanStep, type PlanWarning, type SourceObject } from '@shared/sql/copy-plan'
 import { quoteIdentifier } from '@shared/sql/quote'
 import type { CopyOptions, CopyPreview, CopySchemaRef, Row } from '@shared/types'
 import { forkSession } from '../db/create-session'
@@ -13,9 +13,6 @@ import { dumpArgs, requireTool, runWith, withDefaults, withOptionFile } from './
 // own, rebuilds them on the target in the order of copy-plan.ts and copies the
 // data in between, piping mysqldump into the target's mysql client (or
 // appending its output to a script file).
-
-/** TABLE_TYPE of information_schema.TABLES → the kind copied; other types are left out. */
-export const relationKinds: Record<string, CopyKind | undefined> = { 'BASE TABLE': 'table', VIEW: 'view', SEQUENCE: 'sequence' }
 
 /** Column of the SHOW CREATE … result holding the definition (MariaDB's SHOW CREATE SEQUENCE uses Create Table). */
 const definitionColumns: Record<CopyKind, string> = {
@@ -134,7 +131,7 @@ async function readSchema(job: Job, session: DbSession, schema: string, o: CopyO
   const list: { kind: CopyKind; name: string }[] = []
   const tables = await select(session, 'SELECT TABLE_NAME AS name, TABLE_TYPE AS type FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME', [schema])
   for (const r of tables) {
-    const kind = relationKinds[String(r.type)]
+    const kind = tableTypeKinds[String(r.type)]
     if (kind) list.push({ kind, name: String(r.name) })
   }
   if (o.routines) {
@@ -166,7 +163,7 @@ export async function targetKinds(session: DbSession, schemas: string[]): Promis
   const rows = await select(session, 'SELECT TABLE_SCHEMA AS s, TABLE_NAME AS name, TABLE_TYPE AS type FROM information_schema.TABLES WHERE TABLE_SCHEMA IN (?)', [schemas])
   const kinds: Record<string, CopyKind> = {}
   for (const r of rows) {
-    const kind = relationKinds[String(r.type)]
+    const kind = tableTypeKinds[String(r.type)]
     if (kind) kinds[`${String(r.s)}.${String(r.name)}`] = kind
   }
   return kinds

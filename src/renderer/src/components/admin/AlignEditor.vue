@@ -3,10 +3,10 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { ArrowRight, X } from 'lucide-vue-next'
 import type { AlignObjectDiff, AlignObjectRef, AlignOptions, AlignRequest, Alignment } from '@shared/types'
 import type { Workspace } from '@/workspace/workspace'
-import { alertError, promptText } from '@/dialogs'
+import { alertError } from '@/dialogs'
 import { t } from '@/i18n'
-import { environmentLabel, useApp } from '@/stores/app'
-import { alignConnection, openSessionFor, type AlignSession } from './align-sessions'
+import { environmentLabel } from '@/stores/app'
+import { alignConnection, alignConnections, alignSide, chooseSide, closeSide, defaultAlignOptions, saveNewAlignment, type AlignSide, type AlignmentFields } from './align-sessions'
 import { actionLabels, kindLabels, noteText, runAlignment, statusLabels } from './align-run'
 import { useToolJob } from './tool-job'
 
@@ -18,54 +18,16 @@ import { useToolJob } from './tool-job'
  */
 const props = defineProps<{ ws: Workspace; draft: Partial<Alignment>; compare?: boolean }>()
 const emit = defineEmits<{ saved: [alignment: Alignment]; close: [] }>()
-const app = useApp()
 
-const schemataSql = 'SELECT SCHEMA_NAME AS s FROM information_schema.SCHEMATA ORDER BY SCHEMA_NAME'
-
-/** The workspace's connection first, then the other MySQL/MariaDB ones. */
-const connections = computed(() => [props.ws.config, ...app.connections.filter((c) => c.engine === 'mysql' && c.id !== props.ws.config.id)])
+const connections = computed(() => alignConnections(props.ws))
 
 // --- source and target --------------------------------------------------------
 
-interface End {
-  connectionId: string
-  schema: string
-  schemas: string[]
-  session?: AlignSession
-  /** Number of the latest choice: an earlier one still opening is closed when it arrives. */
-  opening: number
-}
+const source = alignSide(props.ws, props.draft.source)
+const target = alignSide(props.ws, props.draft.target)
+const choose = (side: AlignSide, connectionId: string): Promise<void> => chooseSide(props.ws, side, connectionId)
 
-const newEnd = (e?: Partial<Alignment['source']>): End => ({ connectionId: e?.connectionId ?? props.ws.config.id, schema: e?.schema ?? '', schemas: [], opening: 0 })
-const source = reactive<End>(newEnd(props.draft.source))
-const target = reactive<End>(newEnd(props.draft.target))
-let unmounted = false
-
-async function choose(end: End, connectionId: string): Promise<void> {
-  const n = ++end.opening
-  end.session?.close()
-  end.session = undefined
-  end.schemas = []
-  end.connectionId = connectionId
-  if (!connectionId) return
-  const s = await openSessionFor(props.ws, connectionId)
-  if (n !== end.opening || unmounted) {
-    s?.close()
-    return
-  }
-  if (!s) {
-    end.connectionId = ''
-    return
-  }
-  end.session = s
-  const r = await window.api.db.query(s.sessionId, schemataSql)
-  if (n !== end.opening) return
-  if (r.error) await alertError(t('admin.align.schemasFailed', { name: configOf(end)?.name ?? '' }), r.error.message)
-  end.schemas = r.error ? [] : r.rows.map((x) => String(x.s)).filter((x) => !props.ws.dialect.isSystemSchema(x))
-  if (!end.schemas.includes(end.schema)) end.schema = ''
-}
-
-const configOf = (end: End) => alignConnection(props.ws, end.connectionId)
+const configOf = (end: AlignSide) => alignConnection(props.ws, end.connectionId)
 const ends = [
   { end: source, side: 'source' as const },
   { end: target, side: 'target' as const }
@@ -73,7 +35,7 @@ const ends = [
 
 // --- options ------------------------------------------------------------------
 
-const options = reactive<AlignOptions>({ structure: true, data: true, deleteRows: false, definers: 'keep', backup: true, ...props.draft.options })
+const options = reactive<AlignOptions>({ ...defaultAlignOptions, ...props.draft.options })
 
 // --- choice of the objects ----------------------------------------------------
 
@@ -214,37 +176,37 @@ const statusText = computed(() => {
 })
 const canApply = computed(() => ready.value && !busy.value && !!preview.value && !stale.value && totals.value.count > 0)
 
+const fields = (): AlignmentFields => ({
+  source: { connectionId: source.connectionId, schema: source.schema },
+  target: { connectionId: target.connectionId, schema: target.schema },
+  objects: objects.value,
+  drop: drop.value,
+  options: { ...options }
+})
+
+function saved(a: Alignment): void {
+  savedId.value = a.id
+  savedName.value = a.name
+  emit('saved', a)
+}
+
 async function save(): Promise<void> {
-  let name = savedName.value
   if (!savedId.value) {
-    const typed = await promptText(t('admin.align.saveTitle'), t('admin.align.name'), t('admin.align.defaultName', { source: source.schema, target: target.schema }))
-    if (!typed?.trim()) return
-    name = typed.trim()
+    const a = await saveNewAlignment(fields())
+    if (a) saved(a)
+    return
   }
+  const id = savedId.value
+  const name = savedName.value
   try {
-    await write(name)
+    // the runs recorded by the main since the editor opened are kept
+    const stored = (await window.api.alignments.list()).find((a) => a.id === id)
+    const alignment: Alignment = { ...fields(), id, name, runs: stored?.runs ?? [] }
+    await window.api.alignments.save(alignment)
+    saved(alignment)
   } catch (err) {
     await alertError(t('admin.align.saveFailed', { name }), (err as Error).message)
   }
-}
-
-async function write(name: string): Promise<void> {
-  // the runs recorded by the main since the editor opened are kept
-  const stored = savedId.value ? (await window.api.alignments.list()).find((a) => a.id === savedId.value) : undefined
-  const alignment: Alignment = {
-    id: savedId.value ?? crypto.randomUUID(),
-    name,
-    source: { connectionId: source.connectionId, schema: source.schema },
-    target: { connectionId: target.connectionId, schema: target.schema },
-    objects: objects.value,
-    drop: drop.value,
-    options: { ...options },
-    runs: stored?.runs ?? []
-  }
-  await window.api.alignments.save(alignment)
-  savedId.value = alignment.id
-  savedName.value = name
-  emit('saved', alignment)
 }
 
 async function apply(): Promise<void> {
@@ -282,11 +244,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  unmounted = true
-  for (const end of [source, target]) {
-    end.opening++
-    end.session?.close()
-  }
+  closeSide(source)
+  closeSide(target)
 })
 </script>
 

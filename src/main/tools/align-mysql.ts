@@ -27,14 +27,14 @@ import {
   type TableOptions,
   type TableShape
 } from '@shared/sql/align'
-import { buildCopyPlan, normalizedDefinition, type CopyKind, type PlanStep, type SourceObject } from '@shared/sql/copy-plan'
+import { buildCopyPlan, normalizedDefinition, tableTypeKinds, type CopyKind, type PlanStep, type SourceObject } from '@shared/sql/copy-plan'
 import { qualified, quoteIdentifier } from '@shared/sql/quote'
 import type { AlignKind, AlignNote, AlignObjectDiff, AlignPreview, AlignRequest, Row } from '@shared/types'
 import { forkSession } from '../db/create-session'
 import type { MysqlSession } from '../db/drivers/mysql'
 import type { DbSession } from '../db/session'
 import { dataDir } from '../store'
-import { collations, readObject, relationKinds, script, select, targetKinds, warningText } from './copy-mysql'
+import { collations, readObject, script, select, targetKinds, warningText } from './copy-mysql'
 import { checkCancelled, report, type Job } from './jobs'
 
 // Alignment (MySQL/MariaDB): makes the chosen objects of an existing target
@@ -314,7 +314,7 @@ async function readSide(s: Side): Promise<void> {
     [schema]
   )
   for (const r of tables) {
-    const kind = relationKinds[String(r.type)]
+    const kind = tableTypeKinds[String(r.type)]
     if (!kind) continue
     const name = str(r.name)!
     s.objects.push({ kind, name })

@@ -9,6 +9,9 @@ import { qualified, quoteIdentifier, quoteString } from './quote'
 
 export type CopyKind = 'table' | 'sequence' | 'view' | 'procedure' | 'function' | 'trigger' | 'event'
 
+/** TABLE_TYPE of information_schema.TABLES → the kind copied or aligned; other types are left out. */
+export const tableTypeKinds: Record<string, CopyKind | undefined> = { 'BASE TABLE': 'table', VIEW: 'view', SEQUENCE: 'sequence' }
+
 export interface SourceObject {
   kind: CopyKind
   schema: string

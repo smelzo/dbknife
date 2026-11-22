@@ -137,6 +137,7 @@ export async function runAlignment(ws: Workspace, request: AlignRequest, targetC
     r = { ...r, confirmed: { recreate: all.recreate.map(ref), drop: all.drop.map(ref) } }
   }
   if (end) ws.log(end.error ? 'error' : 'ok', t('workspace.admin.align'), end.error ?? end.message ?? '')
-  if (targetConnectionId === ws.config.id) ws.refreshAfterDdl()
+  // only after a job that ended: not when cancelled, nor when the page closed with the job still running
+  if (end && targetConnectionId === ws.config.id) ws.refreshAfterDdl()
   return end
 }

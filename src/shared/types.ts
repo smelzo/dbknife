@@ -402,6 +402,91 @@ export interface CopyPreview {
   existing: string[]
 }
 
+// --- alignment (MySQL/MariaDB: makes chosen objects of a target schema equal to a source schema) ---
+
+/** The same kinds as CopyKind of src/shared/sql/copy-plan.ts. */
+export type AlignKind = 'table' | 'sequence' | 'view' | 'procedure' | 'function' | 'trigger' | 'event'
+export interface AlignObjectRef {
+  kind: AlignKind
+  name: string
+}
+export interface AlignEnd {
+  connectionId: string
+  schema: string
+}
+export interface AlignOptions {
+  /** Creates and recreates objects (tables included). */
+  structure: boolean
+  /** Writes rows. */
+  data: boolean
+  /** syncRows: deletes the rows that exist only in the target. */
+  deleteRows: boolean
+  definers: 'keep' | 'remove'
+  /** Copies the tables to recreate or drop before the DROP (default true). */
+  backup: boolean
+}
+export interface AlignRun {
+  at: number
+  via: 'app' | 'cli'
+  ok: boolean
+  message: string
+}
+export interface Alignment {
+  id: string
+  name: string
+  source: AlignEnd
+  target: AlignEnd
+  /** null: every object of the source at the time of the run. */
+  objects: AlignObjectRef[] | null
+  /** Objects only in the target, to drop. */
+  drop: AlignObjectRef[]
+  options: AlignOptions
+  /** Most recent first, at most 20. */
+  runs: AlignRun[]
+}
+/** Note or warning translated in the renderer with t(`admin.align.note.${code}`, params). */
+export interface AlignNote {
+  code: string
+  params?: Record<string, string>
+}
+export type AlignStatus = 'same' | 'different' | 'sourceOnly' | 'targetOnly'
+export type AlignAction = 'none' | 'skip' | 'create' | 'recreate' | 'syncRows' | 'replaceRows' | 'drop'
+export interface AlignObjectDiff {
+  kind: AlignKind
+  name: string
+  status: AlignStatus
+  /** With the options of the request. */
+  action: AlignAction
+  /** Structure differences and reasons for a skip. */
+  notes: AlignNote[]
+  /** recreate/replaceRows: rows of the source and of the target. */
+  rows?: { insert: number; update: number; delete: number }
+  sample?: {
+    columns: string[]
+    rows: { kind: 'insert' | 'update' | 'delete'; source?: (string | null)[]; target?: (string | null)[]; changed?: number[] }[]
+  }
+  ddl?: { source?: string; target?: string }
+}
+/** Objects the user has seen and accepted to recreate or drop. */
+export interface AlignConfirmed {
+  recreate: AlignObjectRef[]
+  drop: AlignObjectRef[]
+}
+export interface AlignPreview {
+  objects: AlignObjectDiff[]
+  warnings: AlignNote[]
+}
+export interface AlignRequest {
+  source: { sessionId: string; schema: string }
+  target: { sessionId: string; schema: string }
+  objects: AlignObjectRef[] | null
+  drop: AlignObjectRef[]
+  options: AlignOptions
+  confirmed?: AlignConfirmed
+  /** Saved alignment the run is recorded to. */
+  alignmentId?: string
+}
+
 export interface ToolProgress {
   jobId: string
   /** 0..1, or -1 when unknown. */
@@ -410,6 +495,10 @@ export interface ToolProgress {
   log?: string
   done?: boolean
   error?: string
+  /** Code of the error, when the job tells it apart (alignment: 'needsConfirmation'). */
+  errorCode?: string
+  /** Alignment: the comparison, also when the job stops for a confirmation. */
+  preview?: AlignPreview
 }
 
 export interface ImportedConnections {

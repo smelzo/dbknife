@@ -254,6 +254,75 @@ export class MysqlSession extends ServerSession<Connection> {
     })
   }
 
+  private auxId?: number
+
+  /** CONNECTION_ID() of the auxiliary connection, read once: for KILL QUERY from the user connection (pinned sessions). */
+  async auxThreadId(): Promise<number> {
+    if (this.auxId === undefined) {
+      const [row] = await this.exec<Row[]>(await this.auxConnection(), 'SELECT CONNECTION_ID() AS id')
+      this.auxId = Number(row.id)
+    }
+    return this.auxId
+  }
+
+  /**
+   * Streams the rows of a query on the auxiliary connection to `onRows`, `batch` at a time: reading pauses
+   * until `onRows` has finished with a block. The promise settles only once no `onRows` is running, so the
+   * caller never acts on its outcome while a block is still being handled. An error of `onRows` stops the
+   * query (KILL QUERY, then the connection is destroyed: meant for job sessions) and is thrown.
+   */
+  async queryStream(sql: string, params: unknown[] | undefined, onRows: (rows: Row[]) => Promise<void>, batch = 500): Promise<void> {
+    const conn = await this.auxConnection()
+    await new Promise<void>((resolve, reject) => {
+      let rows: Row[] = []
+      let chain = Promise.resolve()
+      let failed = false
+      const fail = (err: unknown): void => {
+        if (failed) return
+        failed = true
+        // destroying the socket alone leaves the query running on the server, with its snapshot and locks
+        void this.killAuxQuery().finally(() => {
+          this.destroy(conn)
+          reject(err)
+        })
+      }
+      const flush = (): void => {
+        const block = rows
+        rows = []
+        conn.pause()
+        chain = chain.then(async () => {
+          // blocks queued after a failure are not handed over
+          if (failed) return
+          await onRows(block)
+          if (!failed) conn.resume()
+        })
+        chain.catch(fail)
+      }
+      const query = conn.query({ sql, values: params })
+      query.on('result', (row: unknown) => {
+        if (failed) return
+        rows.push(row as Row)
+        if (rows.length >= batch) flush()
+      })
+      query.on('error', (err: unknown) => {
+        if (failed) return
+        failed = true
+        const settle = (): void => reject(err)
+        chain.then(settle, settle)
+      })
+      query.on('end', () => {
+        if (failed) return
+        if (rows.length) flush()
+        chain.then(() => !failed && resolve(), fail)
+      })
+    })
+  }
+
+  /** KILL QUERY of the auxiliary connection's statement, from the user connection (after auxThreadId). */
+  private async killAuxQuery(): Promise<void> {
+    if (this.auxId !== undefined) await this.execute(`KILL QUERY ${this.auxId}`)
+  }
+
   /** Kills the running statement through a short-lived extra connection. */
   async cancel(): Promise<void> {
     const conn = await this.connect()

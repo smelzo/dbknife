@@ -64,7 +64,7 @@ What each database gets:
 | Server status, sessions, variables | ✓ | ✓ | ✓ | — |
 | Users and privileges | ✓ | ✓ (roles) | ✓ (logins, users, roles) | — |
 | Backup and restore | `mysqldump` | `pg_dump` | `.bacpac`, `.bak` | — |
-| Also | Copy Database | sequences, types, extensions | SQL Server Agent jobs (read-only) | — |
+| Also | Copy Database, Alignment | sequences, types, extensions | SQL Server Agent jobs (read-only) | — |
 
 Backup and restore use the database's own command-line tools (`mysqldump` and `mysql`,
 `pg_dump` and `psql`, `sqlpackage`), which have to be installed: DBKnife finds them in the usual

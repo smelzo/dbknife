@@ -29,6 +29,11 @@ const api: Api = {
     browseClose: invoke('channels:browseClose'),
     configHosts: invoke('channels:configHosts')
   },
+  alignments: {
+    list: invoke('alignments:list'),
+    save: invoke('alignments:save'),
+    remove: invoke('alignments:remove')
+  },
   secrets: {
     status: invoke('secrets:status'),
     set: invoke('secrets:set'),
@@ -56,6 +61,8 @@ const api: Api = {
     importDump: invoke('tools:importDump'),
     copyPreview: invoke('tools:copyPreview'),
     copyDatabase: invoke('tools:copyDatabase'),
+    alignCompare: invoke('tools:alignCompare'),
+    alignApply: invoke('tools:alignApply'),
     mssqlBackup: invoke('tools:mssqlBackup'),
     mssqlRestore: invoke('tools:mssqlRestore'),
     cancel: invoke('tools:cancel'),

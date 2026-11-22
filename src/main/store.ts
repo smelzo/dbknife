@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, appendF
 import { join } from 'node:path'
 import {
   defaultSettings,
+  type Alignment,
+  type AlignRun,
   type Channel,
   type ConnectionConfig,
   type HistoryEntry,
@@ -93,6 +95,37 @@ export function removeChannel(id: string): void {
 }
 
 export const getChannel = (id: string): Channel | undefined => listChannels().find((c) => c.id === id)
+
+// --- alignments --------------------------------------------------------------
+
+/** Alignments saved before the backup option existed make the backup. */
+const alignmentDefaults = (a: Alignment): Alignment => ({ ...a, options: { ...a.options, backup: a.options.backup ?? true } })
+
+export const listAlignments = (): Alignment[] => readJson<Alignment[]>(file('alignments.json'), []).map(alignmentDefaults)
+
+export function saveAlignment(alignment: Alignment): void {
+  const all = listAlignments()
+  const i = all.findIndex((a) => a.id === alignment.id)
+  if (i >= 0) all[i] = alignment
+  else all.push(alignment)
+  writeJson(file('alignments.json'), all)
+}
+
+export function removeAlignment(id: string): void {
+  writeJson(
+    file('alignments.json'),
+    listAlignments().filter((a) => a.id !== id)
+  )
+}
+
+/** Puts the run first in the alignment's history (at most 20); nothing when the alignment no longer exists. */
+export function recordAlignmentRun(id: string, run: AlignRun): void {
+  const all = listAlignments()
+  const a = all.find((x) => x.id === id)
+  if (!a) return
+  a.runs = [run, ...a.runs].slice(0, 20)
+  writeJson(file('alignments.json'), all)
+}
 
 // --- secrets (encrypted with the OS keychain-backed safeStorage key) -------
 

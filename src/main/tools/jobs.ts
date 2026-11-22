@@ -49,7 +49,8 @@ export function startJob(sender: WebContents, work: (job: Job) => Promise<string
       report(job, { progress: 1, message, log: message, done: true })
     } catch (err) {
       const error = job.cancelled ? (job.cancelledMessage ?? t('tools.cancelled')) : (err as Error).message
-      report(job, { message: error, log: t('tools.job.error', { error }), done: true, error })
+      const code = job.cancelled ? undefined : (err as { code?: unknown }).code
+      report(job, { message: error, log: t('tools.job.error', { error }), done: true, error, ...(typeof code === 'string' ? { errorCode: code } : {}) })
     } finally {
       jobs.delete(job.id)
     }

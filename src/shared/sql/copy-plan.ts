@@ -9,6 +9,9 @@ import { qualified, quoteIdentifier, quoteString } from './quote'
 
 export type CopyKind = 'table' | 'sequence' | 'view' | 'procedure' | 'function' | 'trigger' | 'event'
 
+/** TABLE_TYPE of information_schema.TABLES → the kind copied or aligned; other types are left out. */
+export const tableTypeKinds: Record<string, CopyKind | undefined> = { 'BASE TABLE': 'table', VIEW: 'view', SEQUENCE: 'sequence' }
+
 export interface SourceObject {
   kind: CopyKind
   schema: string
@@ -145,6 +148,11 @@ function rewrite(ddl: string, o: RewriteOptions): { sql: string; renamed: boolea
     renamed ||= inner.renamed
   }
   return { sql: applyEdits(ddl, edits), renamed }
+}
+
+/** The object's DDL as the target would hold it (schemas renamed, DEFINER handled, AUTO_INCREMENT=n dropped), for comparisons. */
+export function normalizedDefinition(o: SourceObject, rename: Record<string, string>, definers: 'keep' | 'remove'): string {
+  return rewrite(o.ddl, { rename, collations: {}, definers, autoIncrement: o.kind === 'table' }).sql
 }
 
 /** SHOW CREATE DATABASE text for the target name, with IF NOT EXISTS when asked. */

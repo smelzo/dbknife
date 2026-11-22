@@ -196,7 +196,8 @@ export function buildMenu(): void {
         sql(t('menu.server.export'), 'server.export'),
         sql(t('menu.server.import'), 'server.import'),
         sql(t('menu.server.backup'), 'server.backup'),
-        sql(t('menu.server.copy'), 'server.copy')
+        sql(t('menu.server.copy'), 'server.copy'),
+        sql(t('menu.server.align'), 'server.align')
       ]
     },
     // Electron's default Window submenu on macOS, spelled out to label its items

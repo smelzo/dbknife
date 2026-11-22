@@ -60,7 +60,7 @@ const features: Record<Engine, EngineFeatures> = {
   mysql: {
     reconnect: true,
     snippets: true,
-    adminPages: ['status', 'connections', 'users', 'variables', 'export', 'import', 'copy'],
+    adminPages: ['status', 'connections', 'users', 'variables', 'export', 'import', 'copy', 'align'],
     routines: true,
     triggers: true,
     schemaEditor: true,

@@ -40,6 +40,7 @@ import StatusVariables from '../admin/StatusVariables.vue'
 import DataExport from '../admin/DataExport.vue'
 import DataImport from '../admin/DataImport.vue'
 import CopyDatabase from '../admin/CopyDatabase.vue'
+import AlignPage from '../admin/AlignPage.vue'
 import MssqlBackup from '../admin/MssqlBackup.vue'
 import MssqlAgent from '../admin/MssqlAgent.vue'
 import Navigator from './Navigator.vue'
@@ -62,7 +63,8 @@ const adminComponents = {
   export: DataExport,
   import: DataImport,
   backup: MssqlBackup,
-  copy: CopyDatabase
+  copy: CopyDatabase,
+  align: AlignPage
 }
 
 const schemaForNew = (): string => props.ws.defaultSchema || props.ws.visibleSchemas()[0] || ''

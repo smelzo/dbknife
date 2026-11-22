@@ -1,5 +1,5 @@
 import { markRaw, reactive } from 'vue'
-import type { ConnectionConfig, CsvStatus, ExecOptions, ExecResult, HistoryEntry, ServerInfo, Settings } from '@shared/types'
+import type { Alignment, ConnectionConfig, CsvStatus, ExecOptions, ExecResult, HistoryEntry, ServerInfo, Settings } from '@shared/types'
 import { splitStatements, statementAt, type Statement } from '@shared/sql/splitter'
 import { applyRowLimit, statementKind } from '@shared/sql/analyze'
 import { dialectFor, type Dialect } from '@shared/sql/dialect'
@@ -14,7 +14,7 @@ import { Metadata } from './metadata'
 import { createResultTab, hasEdits, resolveEditTarget, verticalText, type ResultTab } from './results'
 import { formatDuration } from './format'
 
-export type AdminPage = 'status' | 'connections' | 'users' | 'variables' | 'export' | 'import' | 'backup' | 'agent' | 'copy'
+export type AdminPage = 'status' | 'connections' | 'users' | 'variables' | 'export' | 'import' | 'backup' | 'agent' | 'copy' | 'align'
 
 const adminTitles: Record<AdminPage, MessageKey> = {
   status: 'workspace.admin.status',
@@ -25,7 +25,8 @@ const adminTitles: Record<AdminPage, MessageKey> = {
   import: 'workspace.admin.import',
   backup: 'workspace.admin.backup',
   agent: 'workspace.admin.agent',
-  copy: 'workspace.admin.copy'
+  copy: 'workspace.admin.copy',
+  align: 'workspace.admin.align'
 }
 
 export type RoutineKind = 'VIEW' | 'PROCEDURE' | 'FUNCTION' | 'TRIGGER'
@@ -60,8 +61,12 @@ export type EditorTab =
   | { kind: 'table'; id: string; title: string; schema: string; table: string | null; dirty?: boolean }
   | { kind: 'routine'; id: string; title: string; schema: string; objectType: RoutineKind; name: string | null; table?: string; dirty?: boolean }
   | { kind: 'inspector'; id: string; title: string; schema: string; table?: string }
-  /** `schema`: the schema the page starts from (Copy Database from the schema's menu). */
-  | { kind: 'admin'; id: string; title: string; page: AdminPage; schema?: string }
+  /**
+   * `schema`: the schema the page starts from (Copy Database, Alignment from the schema's menu);
+   * `align`: an alignment draft the Alignments page opens in its editor at once;
+   * `reopened`: counts the times openAdmin found the tab open, for the page to open its draft again.
+   */
+  | { kind: 'admin'; id: string; title: string; page: AdminPage; schema?: string; align?: Partial<Alignment>; reopened?: number }
   | { kind: 'search'; id: string; title: string }
 
 export type OutputStatus = 'running' | 'ok' | 'warning' | 'error' | 'info'
@@ -411,7 +416,7 @@ export class Workspace {
 
   openTab(tab: EditorTab): void {
     // the same object, whatever the state of its editor
-    const key = (t: EditorTab): string => JSON.stringify({ ...t, id: '', dirty: undefined })
+    const key = (t: EditorTab): string => JSON.stringify({ ...t, id: '', dirty: undefined, reopened: undefined })
     const same = this.tabs.find((t) => t.kind === tab.kind && t.kind !== 'query' && key(t) === key(tab))
     if (same) {
       this.activeTab = same.id
@@ -441,8 +446,11 @@ export class Workspace {
     this.openTab({ kind: 'inspector', id: uid(), title: t('workspace.tab.inspector', { name: table ?? schema }), schema, table })
   }
 
-  openAdmin(page: AdminPage, schema?: string): void {
-    this.openTab({ kind: 'admin', id: uid(), title: t(adminTitles[page]), page, schema })
+  openAdmin(page: AdminPage, schema?: string, align?: Partial<Alignment>): void {
+    const id = uid()
+    this.openTab({ kind: 'admin', id, title: t(adminTitles[page]), page, schema, align })
+    const open = this.tabs.find((t) => t.id === this.activeTab)
+    if (open?.kind === 'admin' && open.id !== id) open.reopened = (open.reopened ?? 0) + 1
   }
 
   openSearch(): void {

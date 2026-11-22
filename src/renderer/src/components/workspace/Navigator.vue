@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Pane, Splitpanes } from 'splitpanes'
-import { Activity, CalendarClock, Copy, DatabaseBackup, Download, RefreshCw, Settings2, Upload, Users, Variable, Cable } from 'lucide-vue-next'
+import { Activity, CalendarClock, Copy, DatabaseBackup, Download, GitCompareArrows, RefreshCw, Settings2, Upload, Users, Variable, Cable } from 'lucide-vue-next'
 import type { MessageKey } from '@shared/i18n'
 import { t } from '@/i18n'
 import type { AdminPage, Workspace } from '@/workspace/workspace'
@@ -23,7 +23,8 @@ const allAdminItems: { page: AdminPage; label: MessageKey; icon: unknown }[] = [
   { page: 'export', label: 'workspace.admin.export', icon: Download },
   { page: 'import', label: 'navigator.importRestore', icon: Upload },
   { page: 'backup', label: 'workspace.admin.backup', icon: DatabaseBackup },
-  { page: 'copy', label: 'workspace.admin.copy', icon: Copy }
+  { page: 'copy', label: 'workspace.admin.copy', icon: Copy },
+  { page: 'align', label: 'workspace.admin.align', icon: GitCompareArrows }
 ]
 
 const adminItems = computed(() => allAdminItems.filter((i) => props.ws.features.adminPages.includes(i.page)))

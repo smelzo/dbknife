@@ -1,4 +1,6 @@
 import type {
+  Alignment,
+  AlignRequest,
   AutocommitResult,
   Channel,
   ChannelResult,
@@ -86,6 +88,12 @@ export interface Api {
     /** The hosts named in the user's and the system's OpenSSH configuration, which a channel can follow (`Channel.configHost`). */
     configHosts(): Promise<string[]>
   }
+  /** Saved alignments (MySQL/MariaDB), run again from their list. */
+  alignments: {
+    list(): Promise<Alignment[]>
+    save(alignment: Alignment): Promise<void>
+    remove(id: string): Promise<void>
+  }
   secrets: {
     status(id: string): Promise<Record<SecretKind, boolean>>
     set(id: string, kind: SecretKind, value: string): Promise<boolean>
@@ -127,6 +135,10 @@ export interface Api {
     copyPreview(sessionId: string, schemas: CopySchemaRef[], targetSessionId: string | null): Promise<CopyPreview>
     /** Starts a Copy Database job (MySQL/MariaDB); returns its id. */
     copyDatabase(sessionId: string, options: CopyOptions): Promise<string>
+    /** Starts an Alignment comparison job (MySQL/MariaDB); the preview comes with its progress. Returns the job id. */
+    alignCompare(request: AlignRequest): Promise<string>
+    /** Starts an Alignment job (MySQL/MariaDB); returns its id. */
+    alignApply(request: AlignRequest): Promise<string>
     /** Starts a backup of a SQL Server database to a .bak file on the server; returns the job id. */
     mssqlBackup(sessionId: string, options: MssqlBackupOptions): Promise<string>
     /** Starts a restore of a .bak file on the SQL Server machine; returns the job id. */

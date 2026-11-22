@@ -14,7 +14,7 @@ import { runScriptRequests } from './components/admin/DataImport.vue'
 function unavailableCommands(ws: Workspace): string[] {
   const f = ws.features
   const out: string[] = []
-  for (const page of ['status', 'connections', 'users', 'variables', 'agent', 'export', 'import', 'backup', 'copy'] as const) {
+  for (const page of ['status', 'connections', 'users', 'variables', 'agent', 'export', 'import', 'backup', 'copy', 'align'] as const) {
     if (!f.adminPages.includes(page)) out.push(`server.${page}`)
   }
   // the import page runs SQL scripts only for the engines dumping to SQL
@@ -279,6 +279,9 @@ export function installCommands(homeActions: { newConnection: () => void }): voi
         break
       case 'server.copy':
         ws.openAdmin('copy')
+        break
+      case 'server.align':
+        ws.openAdmin('align')
         break
     }
   }

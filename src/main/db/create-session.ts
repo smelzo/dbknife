@@ -27,11 +27,12 @@ export function createSession(config: ConnectionConfig, secrets: SessionSecrets,
 
 /**
  * A new open session with the credentials of `session`, which the caller closes (server engines only);
- * `overrides` replace settings of the connection (e.g. the database it starts on).
+ * `overrides` replace settings of the connection (e.g. the database it starts on); `pinned`: see ServerSession.pinned.
  */
-export async function forkSession(session: DbSession, overrides: Partial<ConnectionConfig> = {}): Promise<DbSession> {
+export async function forkSession(session: DbSession, overrides: Partial<ConnectionConfig> = {}, opts: { pinned?: boolean } = {}): Promise<DbSession> {
   if (!(session instanceof ServerSession)) throw new Error(`Cannot fork a ${session.config.engine} session`)
   const fork = createSession({ ...session.config, ...overrides }, session.secrets, false)
+  ;(fork as ServerSession<unknown>).pinned = !!opts.pinned
   try {
     await fork.open()
   } catch (err) {

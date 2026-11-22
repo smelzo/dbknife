@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import type { FileFilter, MenuState, MessageOptions } from '@shared/api'
 import { t } from '@shared/i18n'
 import type {
+  Alignment,
   Channel,
   ChannelResult,
   ConnectionConfig,
@@ -188,6 +189,11 @@ export function registerIpc(): void {
   ipcMain.handle('channels:browseList', (_e, browseId: string, path: string) => browseList(browseId, path))
   ipcMain.handle('channels:browseClose', (_e, browseId: string) => browseClose(browseId))
   ipcMain.handle('channels:configHosts', () => listConfigHosts())
+
+  // alignments
+  ipcMain.handle('alignments:list', () => store.listAlignments())
+  ipcMain.handle('alignments:save', (_e, a: Alignment) => store.saveAlignment(a))
+  ipcMain.handle('alignments:remove', (_e, id: string) => store.removeAlignment(id))
 
   // secrets
   ipcMain.handle('secrets:status', (_e, id: string) => store.secretStatus(id))

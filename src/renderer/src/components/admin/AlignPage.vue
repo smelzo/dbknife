@@ -30,6 +30,7 @@ const { job } = tool
 /** The alignment the last Run Now was for, whose progress the detail shows. */
 const runFor = ref('')
 const logEl = ref<HTMLElement>()
+const editor = ref<InstanceType<typeof AlignEditor>>()
 /** Sessions of the running Run Now, closed when it ends or the page closes. */
 let runSessions: AlignSession[] = []
 
@@ -130,17 +131,30 @@ watch(
   () => nextTick(() => logEl.value && (logEl.value.scrollTop = logEl.value.scrollHeight))
 )
 
+/** The draft the tab was opened with: the quick dialog's (compared at once) or a schema of the workspace. */
+function openDraft(): void {
+  if (props.tab.align) edit(props.tab.align, true)
+  else if (props.tab.schema) edit({ source: { connectionId: props.ws.config.id, schema: props.tab.schema } })
+}
+
 onMounted(async () => {
   await reload()
-  if (props.tab.align) edit(props.tab.align)
-  else if (props.tab.schema) edit({ source: { connectionId: props.ws.config.id, schema: props.tab.schema } })
+  openDraft()
 })
+
+// opened again with the same draft, maybe after going back to the list; a running editor is left alone
+watch(
+  () => props.tab.reopened,
+  () => {
+    if (!editor.value?.busy) openDraft()
+  }
+)
 
 onUnmounted(closeRunSessions)
 </script>
 
 <template>
-  <AlignEditor v-if="editing" :key="editing.key" :ws="ws" :draft="editing.draft" :compare="editing.compare" @saved="onSaved" @close="closeEditor" />
+  <AlignEditor v-if="editing" ref="editor" :key="editing.key" :ws="ws" :draft="editing.draft" :compare="editing.compare" @saved="onSaved" @close="closeEditor" />
   <div v-else class="page">
     <div class="page-header">{{ t('workspace.admin.align') }}</div>
     <div class="body">

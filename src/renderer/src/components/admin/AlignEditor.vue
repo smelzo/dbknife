@@ -274,6 +274,8 @@ watch(
   () => nextTick(() => logEl.value && (logEl.value.scrollTop = logEl.value.scrollHeight))
 )
 
+defineExpose({ busy })
+
 onMounted(async () => {
   await Promise.all([choose(source, source.connectionId), choose(target, target.connectionId)])
   if (props.compare) await compare()

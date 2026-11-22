@@ -40,6 +40,7 @@ import {
 } from '@/workspace/object-actions'
 import type { TypeMeta } from '@/workspace/metadata'
 import type { Workspace } from '@/workspace/workspace'
+import AlignDialog from '../admin/AlignDialog.vue'
 import ImportFileDialog from '../editors/ImportFileDialog.vue'
 
 const props = defineProps<{ ws: Workspace; filter: string }>()
@@ -286,6 +287,7 @@ function available(node: Node, items: MenuItemSpec[]): MenuItemSpec[] {
   if (!f.triggers) unavailable.add('create-trigger')
   if (!f.vacuumDatabase) unavailable.add('vacuum')
   if (!f.adminPages.includes('copy')) unavailable.add('copy-database')
+  if (!f.adminPages.includes('align')) ['align', 'align-schema'].forEach((id) => unavailable.add(id))
   const kept = items.filter((i) => !(i.id && unavailable.has(i.id)) && !(i.submenu && !i.submenu.length))
   return kept.filter((i, n) => i.type !== 'separator' || (n > 0 && kept[n - 1].type !== 'separator' && n < kept.length - 1))
 }
@@ -315,6 +317,7 @@ function baseMenuFor(node: Node): MenuItemSpec[] {
         { id: 'create-schema', label: t('schemaTree.menu.createSchema') },
         { id: 'alter-schema', label: t('schemaTree.menu.alterSchema') },
         { id: 'copy-database', label: t('schemaTree.menu.copyDatabase') },
+        { id: 'align-schema', label: t('schemaTree.menu.alignSchema') },
         { id: 'drop', label: t('schemaTree.menu.dropSchema') },
         ...refreshItems
       ]
@@ -334,6 +337,7 @@ function baseMenuFor(node: Node): MenuItemSpec[] {
         { type: 'separator' },
         { label: t('schemaTree.menu.copy'), submenu: copyItems('copy', true) },
         { label: t('schemaTree.menu.send'), submenu: copyItems('send', true) },
+        { id: 'align', label: t('schemaTree.menu.align') },
         { type: 'separator' },
         { id: 'create-table', label: t('schemaTree.menu.createTable') },
         { id: 'alter-table', label: t('schemaTree.menu.alterTable') },
@@ -458,6 +462,12 @@ async function onContext(node: Node): Promise<void> {
         break
       case 'copy-database':
         ws.openAdmin('copy', node.schema)
+        break
+      case 'align-schema':
+        ws.openAdmin('align', node.schema)
+        break
+      case 'align':
+        await openDialog(AlignDialog, { ws, schema: node.schema, table: node.name! })
         break
       case 'create-table':
         ws.openTableEditor(node.schema, null)

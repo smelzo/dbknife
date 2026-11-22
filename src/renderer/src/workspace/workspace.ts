@@ -63,9 +63,10 @@ export type EditorTab =
   | { kind: 'inspector'; id: string; title: string; schema: string; table?: string }
   /**
    * `schema`: the schema the page starts from (Copy Database, Alignment from the schema's menu);
-   * `align`: an alignment draft the Alignments page opens in its editor at once.
+   * `align`: an alignment draft the Alignments page opens in its editor at once;
+   * `reopened`: counts the times openAdmin found the tab open, for the page to open its draft again.
    */
-  | { kind: 'admin'; id: string; title: string; page: AdminPage; schema?: string; align?: Partial<Alignment> }
+  | { kind: 'admin'; id: string; title: string; page: AdminPage; schema?: string; align?: Partial<Alignment>; reopened?: number }
   | { kind: 'search'; id: string; title: string }
 
 export type OutputStatus = 'running' | 'ok' | 'warning' | 'error' | 'info'
@@ -415,7 +416,7 @@ export class Workspace {
 
   openTab(tab: EditorTab): void {
     // the same object, whatever the state of its editor
-    const key = (t: EditorTab): string => JSON.stringify({ ...t, id: '', dirty: undefined })
+    const key = (t: EditorTab): string => JSON.stringify({ ...t, id: '', dirty: undefined, reopened: undefined })
     const same = this.tabs.find((t) => t.kind === tab.kind && t.kind !== 'query' && key(t) === key(tab))
     if (same) {
       this.activeTab = same.id
@@ -446,7 +447,10 @@ export class Workspace {
   }
 
   openAdmin(page: AdminPage, schema?: string, align?: Partial<Alignment>): void {
-    this.openTab({ kind: 'admin', id: uid(), title: t(adminTitles[page]), page, schema, align })
+    const id = uid()
+    this.openTab({ kind: 'admin', id, title: t(adminTitles[page]), page, schema, align })
+    const open = this.tabs.find((t) => t.id === this.activeTab)
+    if (open?.kind === 'admin' && open.id !== id) open.reopened = (open.reopened ?? 0) + 1
   }
 
   openSearch(): void {

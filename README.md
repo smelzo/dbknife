@@ -100,7 +100,7 @@ You need [Node.js](https://nodejs.org) 24 and [pnpm](https://pnpm.io) 10.
 ```sh
 pnpm install
 pnpm dev     # runs the app with hot reload
-pnpm test    # unit tests
+pnpm typecheck && pnpm lint && pnpm test   # the checks CI runs: types, ESLint, unit tests
 pnpm build && pnpm exec electron-builder -c.mac.identity=null   # unsigned package for your system, in dist/
 ```
 

@@ -40,6 +40,11 @@ All versions and their changes are on the [Releases](https://github.com/smelzo/d
   functions and triggers. The table editor writes the smallest `ALTER TABLE` that makes the change.
 - **Administration**: server status with live charts, client sessions, server variables, users,
   roles and privileges, backup and restore.
+- **Alignment** (MySQL, MariaDB): makes the chosen objects of a schema equal to another schema,
+  on the same server or another one. Compare shows the differences and the row counts first;
+  Apply keeps a backup of each table it recreates and puts it back if the job fails. Saved
+  alignments keep the history of their runs and also run from the command line, for cron or a
+  script: `dbknife --runjob <name>` (macOS and Linux).
 - **Import and export**: results to CSV, TSV, JSON, SQL `INSERT`, HTML and Excel; CSV files and
   spreadsheets (xlsx, xls, ods) into a table.
 - **Files**: SQLite databases and CSV files open like a connection. A CSV file is edited as a table
@@ -64,7 +69,7 @@ What each database gets:
 | Server status, sessions, variables | ✓ | ✓ | ✓ | — |
 | Users and privileges | ✓ | ✓ (roles) | ✓ (logins, users, roles) | — |
 | Backup and restore | `mysqldump` | `pg_dump` | `.bacpac`, `.bak` | — |
-| Also | Copy Database, Alignment (saved ones run from the command line too: `dbknife --runjob`, macOS and Linux) | sequences, types, extensions | SQL Server Agent jobs (read-only) | — |
+| Also | Copy Database, Alignment | sequences, types, extensions | SQL Server Agent jobs (read-only) | files on another machine over SSH |
 
 Backup and restore use the database's own command-line tools (`mysqldump` and `mysql`,
 `pg_dump` and `psql`, `sqlpackage`), which have to be installed: DBKnife finds them in the usual

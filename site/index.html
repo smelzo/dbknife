@@ -166,7 +166,7 @@
           <circle class="art__warm" cx="52" cy="25" r="3.5" />
         </svg>
         <h3 class="card__title">Server administration</h3>
-        <p class="card__text">Live status charts, sessions, variables, users and privileges, backup and restore.</p>
+        <p class="card__text">Live status charts, sessions, variables, users and privileges, backup and restore. Alignment of one schema to another, from the app or the command line.</p>
       </li>
       <li class="card">
         <svg class="card__art" viewBox="0 0 64 64" aria-hidden="true">
@@ -189,7 +189,7 @@
           <path class="art__line" d="M34 47.5c0 2.2 5.4 4 12 4s12-1.8 12-4" />
         </svg>
         <h3 class="card__title">Files as connections</h3>
-        <p class="card__text">SQLite databases and CSV files open like a server; a CSV file is saved in its own format.</p>
+        <p class="card__text">SQLite databases and CSV files open like a server, SQLite files on another machine too, over SSH. A CSV file is saved in its own format.</p>
       </li>
       <li class="card">
         <svg class="card__art" viewBox="0 0 64 64" aria-hidden="true">
@@ -264,11 +264,11 @@
           <tr><th scope="row">Server status, sessions, variables</th><td>Yes</td><td>Yes</td><td>Yes</td><td class="engines__none">No</td></tr>
           <tr><th scope="row">Users and privileges</th><td>Yes</td><td>Roles</td><td>Logins, users, roles</td><td class="engines__none">No</td></tr>
           <tr><th scope="row">Backup and restore</th><td><code>mysqldump</code></td><td><code>pg_dump</code></td><td><code>.bacpac</code>, <code>.bak</code></td><td class="engines__none">No</td></tr>
-          <tr><th scope="row">Also</th><td>Copy Database</td><td>Sequences, types, extensions</td><td>SQL Server Agent jobs (read-only)</td><td class="engines__none"></td></tr>
+          <tr><th scope="row">Also</th><td>Copy Database, Alignment</td><td>Sequences, types, extensions</td><td>SQL Server Agent jobs (read-only)</td><td>Files on another machine over SSH</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="section__note">Backup and restore use the database's own command-line tools, which have to be installed. Connections can go through SSH tunnels and SSL.</p>
+    <p class="section__note">Backup and restore use the database's own command-line tools, which have to be installed. Connections can go through SSH tunnels and SSL. Saved alignments also run from the command line, for cron or a script: <code>dbknife --runjob &lt;name&gt;</code> on macOS and Linux.</p>
   </section>
 
   <section class="section" id="download" aria-labelledby="download-title">

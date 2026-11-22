@@ -52,6 +52,8 @@ const indexes = (expression: boolean): IndexPart[] =>
     subPart: null,
     type: 'BTREE',
     collation,
+    comment: '',
+    visible: true,
     ...(expression ? { expression: null } : {})
   }))
 
@@ -61,7 +63,7 @@ const shape = (flavor: 'mysql' | 'mariadb', schema: string, cols: Col[], check: 
   foreignKeys: [
     { name: 'probe_fk', columns: ['t'], refSchema: schema, refTable: 'parent', refColumns: ['id'], updateRule: 'RESTRICT', deleteRule: 'CASCADE' }
   ],
-  checks: [{ name: 'probe_chk', clause: check }],
+  checks: [{ name: 'probe_chk', clause: check, enforced: true }],
   table: { engine: 'InnoDB', collation: ci, createOptions: '', comment: '' },
   flavor,
   createTable: `CREATE TABLE \`probe\` (… ${flavor} …)`
@@ -128,6 +130,16 @@ describe('compareTables between flavors', () => {
       ['CHECK clause', (_, t) => (t.checks[0].clause = '`n` > 0'), { code: 'checkDiffers', params: { name: 'probe_chk' } }],
       ['engine', (_, t) => (t.table.engine = 'MyISAM'), { code: 'tableOptionDiffers', params: { property: 'ENGINE' } }],
       // MariaDB's unquoted NULL is DEFAULT NULL, the MySQL text NULL is DEFAULT 'NULL'
+      // MariaDB writes a newline as \n inside the quotes; MySQL's bare text a\nb is a backslash and an n
+      [
+        'escape sequence in a string default',
+        (s, t) => {
+          col(s, 's3').default = 'a\\nb'
+          col(t, 's3').default = "'a\\nb'"
+        },
+        { code: 'columnDiffers', params: { column: 's3', property: 'COLUMN_DEFAULT' } }
+      ],
+      ['CHECK NOT ENFORCED', (s) => (s.checks[0].enforced = false), { code: 'checkDiffers', params: { name: 'probe_chk' } }],
       ["DEFAULT NULL vs DEFAULT 'NULL'", (_, t) => (col(t, 's1').default = 'NULL'), { code: 'columnDiffers', params: { column: 's1', property: 'COLUMN_DEFAULT' } }],
       [
         'string literal inside an expression',

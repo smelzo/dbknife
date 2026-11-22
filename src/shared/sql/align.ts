@@ -22,6 +22,7 @@ export interface ColumnShape {
   collation: string | null // COLLATION_NAME
   generation: string | null // GENERATION_EXPRESSION: '' (MySQL) or NULL (MariaDB) when not generated
   comment: string // COLUMN_COMMENT
+  srsId?: number | null // SRS_ID, MySQL only
 }
 
 /** One row of information_schema.STATISTICS (one per column of an index). */
@@ -34,6 +35,8 @@ export interface IndexPart {
   type: string // INDEX_TYPE
   collation: string | null // COLLATION: A | D
   expression?: string | null // EXPRESSION, MySQL only
+  comment: string // INDEX_COMMENT
+  visible: boolean // IS_VISIBLE = 'YES' (MySQL), IGNORED = 'NO' (MariaDB)
 }
 
 export interface ForeignKeyShape {
@@ -49,6 +52,7 @@ export interface ForeignKeyShape {
 export interface CheckShape {
   name: string
   clause: string // CHECK_CLAUSE
+  enforced: boolean // TABLE_CONSTRAINTS.ENFORCED (MySQL); always true on MariaDB
 }
 
 /** information_schema.TABLES. */
@@ -89,7 +93,8 @@ export function exprTokens(text: string, flavor: Flavor): string[] {
   const out: string[] = []
   for (let i = 0; i < sig.length; i++) {
     const t = sig[i]
-    if (t.type === 'word' && /^_[a-z0-9]+$/i.test(t.text) && sig[i + 1]?.type === 'string') continue
+    // MySQL adds the introducer on its own; MariaDB only keeps one that was written
+    if (flavor === 'mysql' && t.type === 'word' && /^_[a-z0-9]+$/i.test(t.text) && sig[i + 1]?.type === 'string') continue
     if (t.type !== 'word') {
       out.push(t.text)
       continue
@@ -149,14 +154,14 @@ function columnDefault(c: ColumnShape, flavor: Flavor): ColumnDefault {
   return quoted !== undefined ? { kind: 'literal', value: quoted } : { kind: 'expr', tokens: exprTokens(v, flavor) }
 }
 
-/**
- * Value of a MariaDB default written as one quoted string, with '' and \\ resolved; undefined when it is not one.
- * Other backslash sequences stay as they are, so they compare as different.
- */
+/** MySQL string escapes: \% and \_ keep their backslash, any other \x not listed is x. */
+const stringEscapes: Record<string, string> = { '0': '\0', b: '\b', n: '\n', r: '\r', t: '\t', Z: '\x1a', '%': '\\%', _: '\\_' }
+
+/** Value of a MariaDB default written as one quoted string, with '' and the backslash escapes resolved; undefined when it is not one. */
 function mariadbString(v: string): string | undefined {
   const sig = significantTokens(v)
   if (sig.length !== 1 || sig[0].type !== 'string' || !v.startsWith("'") || sig[0].text !== v) return undefined
-  return v.slice(1, -1).replace(/''|\\\\/g, (s) => s[0])
+  return v.slice(1, -1).replace(/''|\\([\s\S])/g, (_, c: string | undefined) => (c === undefined ? "'" : (stringEscapes[c] ?? c)))
 }
 
 const sameDefault = (a: ColumnDefault, b: ColumnDefault): boolean =>
@@ -200,6 +205,12 @@ function fieldNotes(source: TableShape, target: TableShape, rename: Record<strin
   const sCols = byName(source.columns)
   for (const c of source.columns) if (!tCols.has(c.name)) notes.push({ code: 'columnOnlyIn', params: { column: c.name, side: 'source' } })
   for (const c of target.columns) if (!sCols.has(c.name)) notes.push({ code: 'columnOnlyIn', params: { column: c.name, side: 'target' } })
+  // MariaDB has no SRID on a column: a MySQL one cannot be said equal
+  if (cross) {
+    for (const side of [source, target]) {
+      if (side.flavor === 'mysql') for (const c of side.columns) if (c.srsId != null) notes.push({ code: 'spatialSrid', params: { column: c.name } })
+    }
+  }
   // order among the columns of both sides: a column only on one side does not move the others
   const order = (cols: ColumnShape[], other: Map<string, ColumnShape>): string[] =>
     [...cols].sort((a, b) => a.position - b.position).filter((c) => other.has(c.name)).map((c) => c.name)
@@ -222,6 +233,7 @@ function fieldNotes(source: TableShape, target: TableShape, rename: Record<strin
     const genSame = cross ? (sg === null ? tg === null : tg !== null && sameTokens(sg as string[], tg as string[])) : same(s.generation, t.generation)
     if (!genSame) differs('GENERATION_EXPRESSION', s.generation, t.generation)
     if (s.comment !== t.comment) differs('COLUMN_COMMENT', s.comment, t.comment)
+    if (!cross && !same(s.srsId, t.srsId)) differs('SRS_ID', s.srsId, t.srsId)
   }
 
   // indexes
@@ -235,7 +247,8 @@ function fieldNotes(source: TableShape, target: TableShape, rename: Record<strin
       continue
     }
     const samePart = (p: IndexPart, q: IndexPart): boolean =>
-      same(p.column, q.column) && same(p.subPart, q.subPart) && same(p.collation, q.collation) && same(p.expression, q.expression)
+      same(p.column, q.column) && same(p.subPart, q.subPart) && same(p.collation, q.collation) && same(p.expression, q.expression) &&
+      p.comment === q.comment && p.visible === q.visible
     const equal =
       !!a &&
       !!b &&
@@ -271,7 +284,8 @@ function fieldNotes(source: TableShape, target: TableShape, rename: Record<strin
   for (const name of new Set([...sChk.keys(), ...tChk.keys()])) {
     const a = sChk.get(name)
     const b = tChk.get(name)
-    const equal = !!a && !!b && (cross ? sameTokens(exprTokens(a.clause, sf), exprTokens(b.clause, tf)) : a.clause === b.clause)
+    const equal =
+      !!a && !!b && a.enforced === b.enforced && (cross ? sameTokens(exprTokens(a.clause, sf), exprTokens(b.clause, tf)) : a.clause === b.clause)
     if (!equal) notes.push({ code: 'checkDiffers', params: { name } })
   }
 
@@ -332,7 +346,7 @@ export function alignAction(
 export function tableKey(columns: ColumnShape[], indexes: IndexPart[]): string[] | null {
   const map = indexMap(indexes)
   const primary = map.get('PRIMARY')
-  if (primary) return primary.map((p) => p.column ?? '')
+  if (primary) return primary.every((p) => p.column != null) ? primary.map((p) => p.column!) : null
   const notNull = new Set(columns.filter((c) => c.nullable === 'NO').map((c) => c.name))
   const names = [...map.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
   for (const name of names) {
@@ -370,6 +384,7 @@ export interface KeyColumn {
  * Parameters: for each key, [i, ...key values].
  */
 export function matchQuery(table: string, key: KeyColumn[], columns: string[], count: number): string {
+  if (count < 1) throw new Error('matchQuery needs at least one key')
   const selected = ['k.i AS i', ...columns.map((c, n) => `t.${quoteIdentifier(c)} AS c${n}`)].join(', ')
   const holders = '?, '.repeat(key.length) + '?'
   const first = `SELECT ? AS i, ${key.map((_, n) => `? AS k${n}`).join(', ')}`
@@ -440,11 +455,26 @@ export function chunkByBytes<T>(items: T[], size: (item: T) => number, budget: n
   return chunks
 }
 
-/** Estimated length in SQL: strings ×2 for escapes, binary ×2 in hexadecimal, 4 per value for quotes and separators. */
+/** UTF-8 length of a string, without encoding it. */
+function utf8Length(s: string): number {
+  let n = 0
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    if (c < 0x80) n += 1
+    else if (c < 0x800) n += 2
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length && (s.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      n += 4 // surrogate pair
+      i++
+    } else n += 3
+  }
+  return n
+}
+
+/** Estimated length in SQL: UTF-8 strings ×2 for escapes, binary ×2 in hexadecimal, 4 per value for quotes and separators. */
 export function rowBytes(values: unknown[]): number {
   let n = 0
   for (const v of values) {
-    if (typeof v === 'string') n += v.length * 2
+    if (typeof v === 'string') n += utf8Length(v) * 2
     else if (v instanceof Uint8Array) n += v.length * 2
     else n += String(v).length
     n += 4

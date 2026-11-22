@@ -29,7 +29,7 @@ import {
 } from '@shared/sql/align'
 import { buildCopyPlan, normalizedDefinition, tableTypeKinds, type CopyKind, type PlanStep, type SourceObject } from '@shared/sql/copy-plan'
 import { qualified, quoteIdentifier } from '@shared/sql/quote'
-import type { AlignKind, AlignNote, AlignObjectDiff, AlignPreview, AlignRequest, Row } from '@shared/types'
+import type { AlignKind, AlignNote, AlignObjectDiff, AlignObjectRef, AlignPreview, AlignRequest, Row } from '@shared/types'
 import { valueText } from '@shared/value-text'
 import { forkSession } from '../db/create-session'
 import type { MysqlSession } from '../db/drivers/mysql'
@@ -50,6 +50,14 @@ import { checkCancelled, report, type Job } from './jobs'
 export class NeedsConfirmation extends Error {
   /** ToolProgress.errorCode of the job: the renderer asks for the confirmation. */
   readonly code = 'needsConfirmation'
+
+  constructor(
+    message: string,
+    /** The objects to confirm, for the command line, where nobody can answer. */
+    readonly pending: AlignObjectRef[]
+  ) {
+    super(message)
+  }
 }
 
 /** SHOW CREATE TABLE leaves options out with these modes (MariaDB), so two different tables could read alike. */
@@ -1200,8 +1208,9 @@ export function alignApply(job: Job, source: DbSession, target: DbSession, r: Al
       ...(r.confirmed?.recreate ?? []).map((o) => `recreate\u0000${refKey(ctx, o.kind, o.name)}`),
       ...(r.confirmed?.drop ?? []).map((o) => `drop\u0000${refKey(ctx, o.kind, o.name)}`)
     ])
-    if (items.some((i) => isTableChange(i) && !confirmed.has(`${i.diff.action}\u0000${refKey(ctx, i.kind, i.name)}`))) {
-      throw new NeedsConfirmation(t('tools.align.needsConfirmation'))
+    const pending = items.filter((i) => isTableChange(i) && !confirmed.has(`${i.diff.action}\u0000${refKey(ctx, i.kind, i.name)}`))
+    if (pending.length) {
+      throw new NeedsConfirmation(t('tools.align.needsConfirmation'), pending.map((i) => ({ kind: i.kind, name: i.name })))
     }
 
     // 3. preflight

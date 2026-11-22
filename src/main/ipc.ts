@@ -116,7 +116,7 @@ function restartApp(): void {
  * secrets and, for connections imported from MySQL Workbench, to the
  * password Workbench keeps in the keychain.
  */
-async function openSession(config: ConnectionConfig, creds: Credentials): Promise<{ result: OpenSessionResult; session?: DbSession }> {
+export async function openSession(config: ConnectionConfig, creds: Credentials): Promise<{ result: OpenSessionResult; session?: DbSession }> {
   const id = config.id
   let password = creds.password ?? (await store.getSecret(id, 'password'))
   if (password === undefined && config.workbenchKeychain) {

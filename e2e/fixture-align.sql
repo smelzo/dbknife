@@ -84,8 +84,10 @@ INSERT INTO utenti VALUES (1, 'a');
 CREATE TABLE scambi (id INT NOT NULL PRIMARY KEY, email VARCHAR(50) NOT NULL, UNIQUE KEY email (email));
 INSERT INTO scambi VALUES (1, 'y'), (2, 'x');
 
-CREATE TABLE padre (id INT NOT NULL PRIMARY KEY, nome VARCHAR(20) NOT NULL, CONSTRAINT padre_chk CHECK (id > 0));
-INSERT INTO padre VALUES (1, 'uno'), (2, 'due'), (3, 'tre');
+-- id 0 in an AUTO_INCREMENT column: the backup and its restore must keep it 0
+CREATE TABLE padre (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, nome VARCHAR(20) NOT NULL, CONSTRAINT padre_chk CHECK (nome <> ''));
+SET SESSION sql_mode = CONCAT(@@sql_mode, ',NO_AUTO_VALUE_ON_ZERO');
+INSERT INTO padre VALUES (0, 'zero'), (1, 'uno'), (2, 'due'), (3, 'tre');
 CREATE TRIGGER padre_bi BEFORE INSERT ON padre FOR EACH ROW SET NEW.nome = UPPER(NEW.nome);
 CREATE TABLE figlio (id INT NOT NULL PRIMARY KEY, padre_id INT NULL, CONSTRAINT figlio_padre FOREIGN KEY (padre_id) REFERENCES padre (id));
 INSERT INTO figlio VALUES (1, 3);

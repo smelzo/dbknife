@@ -303,6 +303,33 @@ function fieldNotes(source: TableShape, target: TableShape, rename: Record<strin
 }
 
 /**
+ * The DDL without a character set followed by a collation (`CHARACTER SET cs COLLATE c`, `CHARSET=cs COLLATE=c`):
+ * the collation decides the character set, and MySQL writes one column as `COLLATE c` in SHOW CREATE TABLE and,
+ * once the table is created again from that text, as `CHARACTER SET cs COLLATE c`.
+ */
+function withoutImpliedCharset(ddl: string): string {
+  const sig = significantTokens(ddl)
+  const word = (i: number, w: string): boolean => sig[i]?.type === 'word' && sig[i].text.toUpperCase() === w
+  let out = ''
+  let pos = 0
+  for (let i = 0; i < sig.length; i++) {
+    const start = i
+    if (word(i, 'CHARACTER') && word(i + 1, 'SET')) i += 2
+    else if (word(i, 'CHARSET')) i += 1
+    else continue
+    if (sig[i]?.type === 'symbol' && sig[i].text === '=') i++
+    const name = sig[i]
+    const isName = name && (name.type === 'word' || name.type === 'quoted' || name.type === 'string')
+    if (isName && word(i + 1, 'COLLATE')) {
+      out += ddl.slice(pos, sig[start].start)
+      pos = sig[i + 1].start
+    }
+    i = start
+  }
+  return out + ddl.slice(pos)
+}
+
+/**
  * Structure differences of two tables of the same name; empty = same structure. With the same flavor the
  * SHOW CREATE TABLE texts decide (they hold everything); between MySQL and MariaDB the normalized fields.
  * `rename`: source schema → target schema.
@@ -310,7 +337,7 @@ function fieldNotes(source: TableShape, target: TableShape, rename: Record<strin
 export function compareTables(source: TableShape, target: TableShape, rename: Record<string, string>): AlignNote[] {
   if (source.flavor !== target.flavor) return fieldNotes(source, target, rename, true)
   const definition = (s: TableShape, r: Record<string, string>): string =>
-    normalizedDefinition({ kind: 'table', schema: '', name: '', ddl: s.createTable }, r, 'keep')
+    withoutImpliedCharset(normalizedDefinition({ kind: 'table', schema: '', name: '', ddl: s.createTable }, r, 'keep'))
   if (definition(source, rename) === definition(target, {})) return []
   const notes = fieldNotes(source, target, rename, false)
   return notes.length ? notes : [{ code: 'definitionDiffers' }]

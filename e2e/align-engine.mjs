@@ -170,7 +170,17 @@ try {
 
   // --- 6. orphans and recovery ---------------------------------------------------------------
   reset()
-  const padre = () => rows(`SHOW CREATE TABLE ${dst}.padre`)
+  // the structure as information_schema describes it: SHOW CREATE TABLE of MySQL writes a column of the table
+  // created again from its own text with CHARACTER SET before COLLATE
+  const padre = () =>
+    [
+      `SELECT GROUP_CONCAT(CONCAT_WS(' ', COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, IFNULL(COLUMN_DEFAULT, 'NULL'), EXTRA, IFNULL(COLLATION_NAME, '-')) ORDER BY ORDINAL_POSITION) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '${dst}' AND TABLE_NAME = 'padre'`,
+      `SELECT GROUP_CONCAT(CONCAT_WS(' ', INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME) ORDER BY INDEX_NAME, SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = '${dst}' AND TABLE_NAME = 'padre'`,
+      `SELECT GROUP_CONCAT(CONCAT_WS(' ', cc.CONSTRAINT_NAME, cc.CHECK_CLAUSE) ORDER BY cc.CONSTRAINT_NAME) FROM information_schema.CHECK_CONSTRAINTS cc JOIN information_schema.TABLE_CONSTRAINTS tc ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME WHERE tc.TABLE_SCHEMA = '${dst}' AND tc.TABLE_NAME = 'padre'`,
+      `SELECT CONCAT_WS(' ', ENGINE, TABLE_COLLATION) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '${dst}' AND TABLE_NAME = 'padre'`
+    ]
+      .map((sql) => rows(sql))
+      .join(' | ')
   const padreBefore = padre()
   r = await run('alignApply', request({ objects: [table('padre')] }))
   check('orphans: without confirmation the job stops on needsConfirmation', r.error === uiText('tools.align.needsConfirmation'), outcome(r))
@@ -179,7 +189,7 @@ try {
   r = await run('alignApply', request({ objects: [table('padre')], confirmed: { recreate: [table('padre')], drop: [] } }))
   check('orphans: job failed on orphans', !!r.error && uiPattern('tools.align.orphans').test(r.error) && r.error.includes('figlio_padre'), outcome(r))
   check('orphans: padre has its structure again', padre() === padreBefore, padre())
-  check('orphans: padre has its rows again', rows(`SELECT GROUP_CONCAT(id, nome ORDER BY id) FROM ${dst}.padre`) === '1uno,2due,3tre', rows(`SELECT * FROM ${dst}.padre`))
+  check('orphans: padre has its rows again', rows(`SELECT GROUP_CONCAT(id, nome ORDER BY id) FROM ${dst}.padre`) === '0zero,1uno,2due,3tre', rows(`SELECT * FROM ${dst}.padre`))
   check('orphans: padre_bi exists again', triggers(dst).split(',').includes('padre_bi'), triggers(dst))
   check('orphans: no dbm_al_ table left', backups().length === 0, backups().join(', '))
   check('orphans: no recovery file left', recoveryFiles().length === 0, recoveryFiles().join(', '))
@@ -206,6 +216,8 @@ try {
   same = sameOnBoth('SELECT GROUP_CONCAT(id, "|", prezzo ORDER BY id) FROM $.listini_righe')
   check('triggers: listini_righe rows as in the source', same.ok, same.detail)
   check('triggers: no dbm_al_ table left', backups().length === 0, backups().join(', '))
+  r = await run('alignCompare', request({ objects: [table('ordini')] }))
+  check('triggers: ordini recreated from the source compares the same', object(r, 'ordini')?.status === 'same', JSON.stringify(object(r, 'ordini')))
 
   // --- 8. identity: another saved connection to the same server and schema --------------------
   reset()

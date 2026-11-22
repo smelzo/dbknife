@@ -182,6 +182,20 @@ describe('compareTables between flavors', () => {
   })
 })
 
+describe('compareTables with the same flavor', () => {
+  // the SHOW CREATE TABLE of MySQL 8.4 before and after the table is created again from it (measured on dbm-test-mysql)
+  const created = (column: string): string =>
+    `CREATE TABLE \`padre\` (\n  \`id\` int NOT NULL,\n  \`nome\` varchar(20) ${column} NOT NULL,\n  PRIMARY KEY (\`id\`),\n  CONSTRAINT \`padre_chk\` CHECK ((\`id\` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
+  const table = (createTable: string): TableShape => ({ ...mysql(), createTable })
+
+  it("a table recreated from MySQL's SHOW CREATE TABLE is not different from its source", () => {
+    const source = table(created('COLLATE utf8mb4_general_ci'))
+    expect(compareTables(source, table(created('CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci')), {})).toEqual([])
+    // the collation itself still counts
+    expect(compareTables(source, table(created('CHARACTER SET latin1 COLLATE latin1_bin')), {})).not.toEqual([])
+  })
+})
+
 describe('keyset paging', () => {
   // bug: an OR/AND expansion that skips or repeats rows between two blocks
   it('the keyset filter on a 3-column key returns exactly the tuples after the last one', () => {

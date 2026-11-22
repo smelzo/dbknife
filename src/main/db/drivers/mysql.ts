@@ -267,8 +267,9 @@ export class MysqlSession extends ServerSession<Connection> {
 
   /**
    * Streams the rows of a query on the auxiliary connection to `onRows`, `batch` at a time: reading pauses
-   * until `onRows` has finished with a block. An error of `onRows` stops the query by destroying the
-   * connection (meant for job sessions) and is thrown.
+   * until `onRows` has finished with a block. The promise settles only once no `onRows` is running, so the
+   * caller never acts on its outcome while a block is still being handled. An error of `onRows` stops the
+   * query (KILL QUERY, then the connection is destroyed: meant for job sessions) and is thrown.
    */
   async queryStream(sql: string, params: unknown[] | undefined, onRows: (rows: Row[]) => Promise<void>, batch = 500): Promise<void> {
     const conn = await this.auxConnection()
@@ -279,14 +280,20 @@ export class MysqlSession extends ServerSession<Connection> {
       const fail = (err: unknown): void => {
         if (failed) return
         failed = true
-        this.destroy(conn)
-        reject(err)
+        // destroying the socket alone leaves the query running on the server, with its snapshot and locks
+        void this.killAuxQuery().finally(() => {
+          this.destroy(conn)
+          reject(err)
+        })
       }
       const flush = (): void => {
         const block = rows
         rows = []
         conn.pause()
-        chain = chain.then(() => onRows(block)).then(() => {
+        chain = chain.then(async () => {
+          // blocks queued after a failure are not handed over
+          if (failed) return
+          await onRows(block)
           if (!failed) conn.resume()
         })
         chain.catch(fail)
@@ -300,7 +307,8 @@ export class MysqlSession extends ServerSession<Connection> {
       query.on('error', (err: unknown) => {
         if (failed) return
         failed = true
-        reject(err)
+        const settle = (): void => reject(err)
+        chain.then(settle, settle)
       })
       query.on('end', () => {
         if (failed) return
@@ -308,6 +316,11 @@ export class MysqlSession extends ServerSession<Connection> {
         chain.then(() => !failed && resolve(), fail)
       })
     })
+  }
+
+  /** KILL QUERY of the auxiliary connection's statement, from the user connection (after auxThreadId). */
+  private async killAuxQuery(): Promise<void> {
+    if (this.auxId !== undefined) await this.execute(`KILL QUERY ${this.auxId}`)
   }
 
   /** Kills the running statement through a short-lived extra connection. */

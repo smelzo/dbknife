@@ -114,6 +114,8 @@ interface Context {
   warnings: AlignNote[]
   /** Every session the job opened, closed at its end. */
   sessions: DbSession[]
+  /** The KILL QUERY sent by the cancelers, awaited before a recovery. */
+  kills: Promise<unknown>[]
 }
 
 interface RowCounts {
@@ -145,10 +147,12 @@ const values = (row: Row, count: number): unknown[] => Array.from({ length: coun
  */
 const keyParam = (numeric: boolean, v: unknown): unknown => (numeric && typeof v === 'string' && numericText.test(v) ? { toSqlString: () => v } : v)
 
-function sideNames(lowerCaseNames: number): { fold: (kind: AlignKind, name: string) => string; same: (a: string, b: string) => boolean } {
+/** Name comparisons on the target: `fold` an object's name, `label` a `schema.name`, `same` for two names. */
+function sideNames(lowerCaseNames: number): { fold: (kind: AlignKind, name: string) => string; label: (text: string) => string; same: (a: string, b: string) => boolean } {
   const fold = (kind: AlignKind, name: string): string =>
     caseInsensitiveKinds.has(kind) || (lowerCaseNames !== 0 && (relations.has(kind) || kind === 'trigger')) ? name.toLowerCase() : name
-  return { fold, same: (a, b) => (lowerCaseNames === 0 ? a === b : a.toLowerCase() === b.toLowerCase()) }
+  const label = (text: string): string => (lowerCaseNames === 0 ? text : text.toLowerCase())
+  return { fold, label, same: (a, b) => label(a) === label(b) }
 }
 
 /** Key pairing the objects of the two sides: tables, views and sequences share their names. */
@@ -205,9 +209,10 @@ async function start(job: Job, source: DbSession, target: DbSession, r: AlignReq
   const writerSession = await openPinned(target)
   sessions.push(writerSession)
 
+  const kills: Promise<unknown>[] = []
   for (const s of [readerSession, writerSession]) {
     const id = await s.auxThreadId()
-    job.cancelers.add(() => void s.execute(`KILL QUERY ${id}`))
+    job.cancelers.add(() => kills.push(s.execute(`KILL QUERY ${id}`)))
   }
 
   for (const [s, schema] of [
@@ -248,7 +253,7 @@ async function start(job: Job, source: DbSession, target: DbSession, r: AlignReq
     const [lock] = await select(writerSession, 'SELECT GET_LOCK(?, 0) AS l', [lockName(r.target.schema, lowerCaseNames)])
     if (Number(lock.l) !== 1) throw new Error(t('tools.align.busy', { schema: r.target.schema }))
   }
-  return { job, r, reader, writer, lowerCaseNames, rename: { [r.source.schema]: r.target.schema }, warnings: [], sessions }
+  return { job, r, reader, writer, lowerCaseNames, rename: { [r.source.schema]: r.target.schema }, warnings: [], sessions, kills }
 }
 
 // --- reading a schema --------------------------------------------------------
@@ -531,6 +536,9 @@ const preview = (ctx: Context, items: Item[]): AlignPreview => ({ objects: items
 
 // --- rows --------------------------------------------------------------------
 
+/** Which key columns are numeric (their values go as numeric literals, see keyParam). */
+const numericKey = (info: TableInfo, key: string[]): boolean[] => key.map((k) => numericType.test(info.columns.find((c) => c.name === k)?.type ?? ''))
+
 function keyColumn(info: TableInfo, name: string): KeyColumn {
   const c = info.columns.find((x) => x.name === name)
   return c?.collation && c.charset ? { name, charset: c.charset, collation: c.collation } : { name }
@@ -538,7 +546,7 @@ function keyColumn(info: TableInfo, name: string): KeyColumn {
 
 /** Rows of `table` on `s` matching `keys` (joined by the server): position in `keys` → the values of `cols`. */
 async function matchRows(ctx: Context, s: Side, table: string, info: TableInfo, key: string[], keys: unknown[][], cols: string[]): Promise<Map<number, unknown[]>> {
-  const numeric = key.map((k) => numericType.test(info.columns.find((c) => c.name === k)?.type ?? ''))
+  const numeric = numericKey(info, key)
   const keyColumns = key.map((k) => keyColumn(info, k))
   const qualifiedTable = qualified(s.schema, table)
   const found = new Map<number, unknown[]>()
@@ -553,7 +561,7 @@ async function matchRows(ctx: Context, s: Side, table: string, info: TableInfo, 
 
 /** Keyset blocks of `cols` of `table` on `s`, in key order; `onBlock` gets the rows as value arrays. */
 async function keysetBlocks(s: Side, table: string, info: TableInfo, key: string[], cols: string[], onBlock: (rows: unknown[][]) => Promise<void>): Promise<void> {
-  const numeric = key.map((k) => numericType.test(info.columns.find((c) => c.name === k)?.type ?? ''))
+  const numeric = numericKey(info, key)
   const at = key.map((k) => cols.indexOf(k))
   const order = key.map(quoteIdentifier).join(', ')
   let last: unknown[] | null = null
@@ -587,7 +595,7 @@ async function walkRows(ctx: Context, item: Item, write: boolean): Promise<RowCo
   const targetTable = item.target!.name
   const target = qualified(writer.schema, targetTable)
   const at = key.map((k) => cols.indexOf(k))
-  const numeric = key.map((k) => numericType.test(targetInfo.columns.find((c) => c.name === k)?.type ?? ''))
+  const numeric = numericKey(targetInfo, key)
   const onUpdate = targetInfo.columns.filter((c) => hasOnUpdate(c.extra) && cols.includes(c.name)).map((c) => c.name)
   const counts: RowCounts = { insert: 0, update: 0, delete: 0 }
   const sample: NonNullable<AlignObjectDiff['sample']> = { columns: cols, rows: [] }
@@ -707,8 +715,12 @@ interface Inventory {
   saved: SourceObject[]
   /** Triggers recreated at the end from their saved definition. */
   restore: SourceObject[]
+  /** Target triggers and events whose replacement from the source is created after the COMMIT (phase 9). */
+  late: SourceObject[]
+  /** Objects the job creates (action create), dropped again by a recovery before the COMMIT. */
+  created: { kind: AlignKind; name: string }[]
   backups: Backup[]
-  file?: string
+  file: string
   /** `schema.name` (folded) of the objects dropped or created so far. */
   touched: Set<string>
   /** The schema's collation was changed by an ALTER DATABASE not yet reverted. */
@@ -716,6 +728,17 @@ interface Inventory {
   collation: string
   createDatabase: string
 }
+
+/** Where the writes are: the COMMIT, when it was sent and its outcome is not known, decides what a recovery does. */
+interface ApplyState {
+  inTransaction: boolean
+  committing: boolean
+  committed: boolean
+  totals: { created: number; recreated: number; dropped: number; inserted: number; updated: number; deleted: number }
+}
+
+/** INSERT … SELECT between a table and its backup keep a 0 in an AUTO_INCREMENT column; not strict: the rows are the table's own. */
+const copyMode = "SET SESSION sql_mode = 'NO_AUTO_VALUE_ON_ZERO'"
 
 const isTableChange = (item: Item): boolean =>
   item.diff.action === 'drop' || (item.diff.action === 'recreate' && (item.kind === 'table' || item.target?.kind === 'table'))
@@ -750,12 +773,16 @@ async function preflight(ctx: Context, items: Item[]): Promise<void> {
   ]
   if (lacking.length) throw new Error(t('tools.align.missingEngine', { engines: lacking.join(', ') }))
 
+  // tables of the target that go away: dropped, or replaced by a view or a sequence of the source
   const { same } = sideNames(ctx.lowerCaseNames)
-  const dropped = items.filter((i) => i.diff.action === 'drop' && i.target?.kind === 'table').map((i) => i.target!.name)
-  if (dropped.length) {
-    const inDrop = (schema: string, table: string): boolean => same(schema, writer.schema) && dropped.some((d) => same(d, table))
+  const gone = items
+    .filter((i) => i.target?.kind === 'table' && (i.diff.action === 'drop' || (i.diff.action === 'recreate' && i.kind !== 'table')))
+    .map((i) => i.target!.name)
+  if (gone.length) {
+    // a child that goes too takes its foreign keys with it
+    const goes = (schema: string, table: string): boolean => same(schema, writer.schema) && gone.some((d) => same(d, table))
     for (const fk of await foreignKeys(writer.session, 'k.REFERENCED_TABLE_SCHEMA = ?', [writer.schema])) {
-      if (inDrop(fk.refSchema, fk.refTable) && !inDrop(fk.schema, fk.table)) {
+      if (goes(fk.refSchema, fk.refTable) && !goes(fk.schema, fk.table)) {
         throw new Error(t('tools.align.dropReferenced', { table: fk.refTable, by: `${fk.schema}.${fk.table}` }))
       }
     }
@@ -777,16 +804,27 @@ function restoreSteps(ctx: Context, inv: Inventory, objects: SourceObject[], kin
     targetKinds: kinds
   })
   const tables = new Set(objects.filter((o) => o.kind === 'table').map((o) => o.name))
-  const rows = inv.backups
-    .filter((b) => tables.has(b.table))
-    .flatMap((b): PlanStep[] => {
-      const cols = b.columns.map(quoteIdentifier).join(', ')
-      return [
-        { sql: `INSERT INTO ${qualified(dst, b.table)} (${cols}) SELECT ${cols} FROM ${qualified(dst, b.copy)}`, compound: false, object: `${dst}.${b.table}` },
-        { sql: `DROP TABLE ${qualified(dst, b.copy)}`, compound: false, object: `${dst}.${b.copy}` }
-      ]
-    })
-  return [...plan.structure, ...rows, ...plan.finish]
+  const backups = inv.backups.filter((b) => tables.has(b.table))
+  const rows = backups.flatMap((b): PlanStep[] => {
+    const cols = b.columns.map(quoteIdentifier).join(', ')
+    return [
+      { sql: `INSERT INTO ${qualified(dst, b.table)} (${cols}) SELECT ${cols} FROM ${qualified(dst, b.copy)}`, compound: false, object: `${dst}.${b.table}` },
+      { sql: `DROP TABLE ${qualified(dst, b.copy)}`, compound: false, object: `${dst}.${b.copy}` }
+    ]
+  })
+  // the plan's finish puts the session's sql_mode back
+  const mode: PlanStep[] = rows.length ? [{ sql: copyMode, compound: false, object: '' }] : []
+  return [...plan.structure, ...mode, ...rows, ...plan.finish]
+}
+
+/** The recovery script of `objects`; the schema names of the header on one line. */
+async function writeRecoveryFile(ctx: Context, inv: Inventory, objects: SourceObject[], kinds?: Record<string, CopyKind>): Promise<void> {
+  const line = (text: string): string => text.replace(/[\r\n]+/g, ' ')
+  const { r } = ctx
+  const header =
+    `-- DBKnife Alignment ${new Date().toISOString()}: ${line(r.source.schema)} → ${line(r.target.schema)}\n` +
+    `-- Recreates the objects of ${line(r.target.schema)} that the alignment recreated or dropped, and their rows from the backup tables.\n\n`
+  await writeFile(inv.file, header + script(restoreSteps(ctx, inv, objects, kinds)), { mode: 0o600 })
 }
 
 /** Phase 4: definitions of what is lost, the triggers to take away, the backups and the recovery file. */
@@ -799,6 +837,9 @@ async function takeInventory(ctx: Context, items: Item[], inv: Inventory): Promi
     item.targetObject ??= await readObject(writer.session, writer.schema, item.target!.kind, item.target!.name)
     byName.set(`${item.target!.kind}\u0000${fold(item.target!.kind, item.target!.name)}`, item.targetObject)
   }
+  inv.created = items.filter((i) => i.diff.action === 'create').map((i) => ({ kind: i.kind, name: i.source!.name }))
+  // events are recreated from the source after the COMMIT
+  inv.late = changed.filter((i) => i.diff.action === 'recreate' && i.kind === 'event' && i.target!.kind === 'event').map((i) => i.targetObject!)
 
   // triggers of the tables receiving DDL or rows, and the triggers recreated or dropped, in ACTION_ORDER
   const tables = items
@@ -819,9 +860,10 @@ async function takeInventory(ctx: Context, items: Item[], inv: Inventory): Promi
     const item = triggerItem(o.name)
     const dropped = item?.diff.action === 'drop'
     const goesWithTable = droppedTables.some((tb) => same(tb, o.table!))
-    // the source has one of the same name among the objects created or recreated
+    // the source has one of the same name among the objects created or recreated (after the COMMIT)
     const replaced = item?.source?.kind === 'trigger' && (item.diff.action === 'create' || item.diff.action === 'recreate')
-    if (!dropped && !goesWithTable && !replaced) inv.restore.push(saved)
+    if (replaced) inv.late.push(saved)
+    else if (!dropped && !goesWithTable) inv.restore.push(saved)
   }
   const tableBackedUp = (item: Item): boolean => r.options.backup && item.target?.kind === 'table'
   inv.saved = [
@@ -831,10 +873,13 @@ async function takeInventory(ctx: Context, items: Item[], inv: Inventory): Promi
 
   const [db] = await select(writer.session, `SHOW CREATE DATABASE ${quoteIdentifier(writer.schema)}`)
   inv.createDatabase = String(db['Create Database'])
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  inv.file = join(dataDir('alignments', 'recovery'), `${stamp}-${r.alignmentId ?? 'adhoc'}.sql`)
 
   try {
     if (r.options.backup) {
       const tag = randomBytes(4).toString('hex')
+      await exec(writer.session, copyMode)
       for (const item of changed.filter(tableBackedUp)) {
         checkCancelled(job)
         const table = item.target!.name
@@ -846,44 +891,42 @@ async function takeInventory(ctx: Context, items: Item[], inv: Inventory): Promi
         const cols = columns.map(quoteIdentifier).join(', ')
         await exec(writer.session, `INSERT INTO ${qualified(writer.schema, copy)} (${cols}) SELECT ${cols} FROM ${qualified(writer.schema, table)}`)
       }
+      await exec(writer.session, 'SET SESSION sql_mode = ?', [writer.sqlMode])
     }
-    if (inv.saved.length) {
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-      inv.file = join(dataDir('alignments', 'recovery'), `${stamp}-${r.alignmentId ?? 'adhoc'}.sql`)
-      const header = `-- DBKnife Alignment ${new Date().toISOString()}: ${r.source.schema} → ${r.target.schema}\n-- Recreates the objects of ${r.target.schema} that the alignment recreated or dropped, and their rows from the backup tables.\n\n`
-      await writeFile(inv.file, header + script(restoreSteps(ctx, inv, inv.saved)), { mode: 0o600 })
-    }
+    // with the kinds as they are now: the script drops a view or a table with the right statement
+    await writeRecoveryFile(ctx, inv, inv.saved, await targetKinds(writer.session, [writer.schema]))
   } catch (err) {
     await dropBackups(ctx, inv, writer.session)
-    if (inv.file) await rm(inv.file, { force: true })
+    await rm(inv.file, { force: true })
     throw err
   }
 }
 
-async function dropBackups(ctx: Context, inv: Inventory, session: DbSession): Promise<boolean> {
-  let ok = true
+/** Drops the backup tables; returns those left. */
+async function dropBackups(ctx: Context, inv: Inventory, session: DbSession): Promise<string[]> {
+  const left: string[] = []
   for (const b of inv.backups) {
     try {
       await exec(session, `DROP TABLE IF EXISTS ${qualified(ctx.writer.schema, b.copy)}`)
     } catch {
-      ok = false
+      left.push(b.copy)
     }
   }
-  return ok
+  return left
 }
 
 /** Runs steps on the writer, recording the objects touched and the ALTER DATABASE … COLLATE not yet reverted. */
-async function runSteps(ctx: Context, inv: Inventory, steps: PlanStep[], session: DbSession = ctx.writer.session, cancellable = true): Promise<void> {
-  const fold = ctx.lowerCaseNames === 0 ? (s: string): string => s : (s: string): string => s.toLowerCase()
+async function runSteps(ctx: Context, inv: Inventory, steps: PlanStep[]): Promise<void> {
+  const { label } = sideNames(ctx.lowerCaseNames)
   for (const step of steps) {
-    if (cancellable) checkCancelled(ctx.job)
+    checkCancelled(ctx.job)
     if (step.object) {
-      inv.touched.add(fold(step.object))
+      inv.touched.add(label(step.object))
       report(ctx.job, { message: t('tools.copy.creating', { object: step.object }) })
     }
     const alter = /^ALTER DATABASE .* COLLATE (\S+)$/.exec(step.sql)
     try {
-      await exec(session, step.sql)
+      await exec(ctx.writer.session, step.sql)
     } catch (err) {
       throw new Error(t('tools.copy.stepFailed', { object: step.object || step.sql, error: (err as Error).message }))
     }
@@ -911,51 +954,230 @@ async function orphans(ctx: Context, written: string[]): Promise<string[]> {
   return found
 }
 
+const duplicateKey = (message: string): string => /for key '([^']+)'/.exec(message)?.[1] ?? message
+
+/** Phases 5-8: triggers away, structure, rows in one transaction, orphans, COMMIT. */
+async function writeTarget(ctx: Context, items: Item[], inv: Inventory, st: ApplyState): Promise<PlanStep[]> {
+  const { job, r, reader, writer } = ctx
+  const dst = writer.schema
+  const { label } = sideNames(ctx.lowerCaseNames)
+  const { totals } = st
+
+  // 5. triggers away, so that the writes do not fire them
+  for (const trg of inv.saved.filter((o) => o.kind === 'trigger')) {
+    checkCancelled(job)
+    inv.touched.add(label(`${dst}.${trg.name}`))
+    await exec(writer.session, `DROP TRIGGER IF EXISTS ${qualified(dst, trg.name)}`)
+  }
+
+  // 6. structure
+  let finish: PlanStep[] = []
+  if (r.options.structure) {
+    await exec(writer.session, 'SET FOREIGN_KEY_CHECKS = 0')
+    for (const item of items.filter((i) => i.diff.action === 'drop')) {
+      checkCancelled(job)
+      const o = item.target!
+      inv.touched.add(label(`${dst}.${o.name}`))
+      report(job, { message: t('tools.align.dropping', { object: `${dst}.${o.name}` }) })
+      await exec(writer.session, `DROP ${o.kind.toUpperCase()} IF EXISTS ${qualified(dst, o.name)}`)
+      totals.dropped++
+    }
+    const built = items.filter((i) => i.diff.action === 'create' || i.diff.action === 'recreate')
+    if (built.length) {
+      const [db] = await select(reader.session, `SHOW CREATE DATABASE ${quoteIdentifier(reader.schema)}`)
+      const plan = buildCopyPlan({
+        schemas: [{ name: reader.schema, ddl: String(db['Create Database']), collation: inv.collation }],
+        objects: built.map((i) => i.sourceObject!),
+        rename: ctx.rename,
+        definers: r.options.definers,
+        existing: 'recreate',
+        structureOnly: false,
+        collations: {},
+        targetKinds: await targetKinds(writer.session, [dst])
+      })
+      for (const w of plan.warnings) report(job, { log: warningText(w) })
+      await runSteps(ctx, inv, plan.structure)
+      finish = plan.finish
+      for (const i of built) totals[i.diff.action === 'create' ? 'created' : 'recreated']++
+    }
+  }
+
+  // 7. rows, in one transaction
+  const rowItems = items.filter(
+    (i) => i.diff.action === 'syncRows' || i.diff.action === 'replaceRows' || (r.options.data && i.kind === 'table' && (i.diff.action === 'create' || i.diff.action === 'recreate'))
+  )
+  if (!rowItems.length) return finish
+  const written = rowItems.map((i) => (i.diff.action === 'create' || i.diff.action === 'recreate' ? i.source!.name : i.target!.name))
+  await exec(writer.session, 'SET NAMES utf8mb4')
+  // UNIQUE_CHECKS = 0 (set by the plan) may let InnoDB miss duplicates
+  await exec(writer.session, 'SET UNIQUE_CHECKS = 1')
+  await exec(writer.session, 'SET FOREIGN_KEY_CHECKS = 0')
+  await exec(writer.session, 'SET sql_mode = ?', [[writer.sqlMode, 'NO_AUTO_VALUE_ON_ZERO'].filter(Boolean).join(',')])
+  await exec(writer.session, "SET time_zone = '+00:00'")
+  await exec(writer.session, 'START TRANSACTION')
+  st.inTransaction = true
+  for (const item of rowItems) {
+    checkCancelled(job)
+    await exec(writer.session, 'SAVEPOINT dbm_t')
+    const action = item.diff.action
+    if (action === 'syncRows') {
+      try {
+        const counts = await walkRows(ctx, item, true)
+        totals.inserted += counts.insert
+        totals.updated += counts.update
+        totals.deleted += counts.delete
+        continue
+      } catch (err) {
+        if (errno(err) !== 1062) throw err
+        if (!r.options.deleteRows) throw new Error(t('tools.align.uniqueConflict', { table: item.target!.name, key: duplicateKey((err as Error).message) }))
+        // values of UNIQUE keys exchanged between rows: the table is written again as a whole
+        await exec(writer.session, 'ROLLBACK TO SAVEPOINT dbm_t')
+        report(job, { log: t('tools.align.uniqueRewrite', { table: item.target!.name }) })
+      }
+    }
+    let targetTable = item.target?.name ?? item.source!.name
+    if (action === 'create' || action === 'recreate') targetTable = item.source!.name
+    else {
+      const deleted = await exec(writer.session, `DELETE FROM ${qualified(dst, targetTable)}`)
+      totals.deleted += Number(deleted.affectedRows ?? 0)
+    }
+    totals.inserted += await copyRows(ctx, item.source!.name, targetTable, item.columns)
+  }
+
+  // 8. orphans, then COMMIT
+  report(job, { message: t('tools.align.checkingOrphans') })
+  const found = await orphans(ctx, written)
+  if (found.length) throw new Error(t('tools.align.orphans', { constraints: found.join(', ') }))
+  st.committing = true
+  await exec(writer.session, 'COMMIT')
+  st.committing = false
+  st.inTransaction = false
+  return finish
+}
+
+/** SELECT 1 on the session; a KILL QUERY that reached it while idle may interrupt the first statement, so twice. */
+async function alive(session: DbSession): Promise<boolean> {
+  for (let i = 0; i < 2; i++) {
+    try {
+      await exec(session, 'SELECT 1')
+      return true
+    } catch (err) {
+      if (errno(err) !== 1317) return false
+    }
+  }
+  return false
+}
+
 /**
- * After a failure: back to the target as it was, every step tried on its own. Before the COMMIT the recreated and
- * dropped objects come back from their definitions (tables from their backup); after it the rows are final, so only
- * the triggers taken away come back. Returns the errors of the steps that did not succeed.
+ * Back to the target as it was, every step tried on its own; returns the errors. Before the COMMIT the objects
+ * created are dropped and the recreated or dropped ones come back from their definitions (tables from their
+ * backup). After it the rows are final: only the triggers taken away come back, with the triggers and events
+ * whose replacement from the source is missing.
  */
-async function recover(ctx: Context, inv: Inventory, session: DbSession, committed: boolean): Promise<string[]> {
+async function recover(ctx: Context, inv: Inventory, session: DbSession, committed: boolean): Promise<{ errors: string[]; objects: SourceObject[] }> {
   const errors: string[] = []
-  const fold = ctx.lowerCaseNames === 0 ? (s: string): string => s : (s: string): string => s.toLowerCase()
+  const { label, same } = sideNames(ctx.lowerCaseNames)
   const dst = ctx.writer.schema
-  const backedUp = new Set(inv.backups.map((b) => b.table))
-  const objects = committed
-    ? inv.restore
-    : inv.saved.filter((o) => inv.touched.has(fold(`${dst}.${o.name}`)) && (o.kind !== 'table' || backedUp.has(o.name)))
+  const touched = (name: string): boolean => inv.touched.has(label(`${dst}.${name}`))
+  const run = async (sql: string, object: string): Promise<void> => {
+    try {
+      await exec(session, sql)
+    } catch (err) {
+      errors.push(`${object || sql}: ${(err as Error).message}`)
+      report(ctx.job, { log: t('tools.align.restoreFailed', { object: object || sql, error: (err as Error).message }) })
+    }
+  }
+  let objects: SourceObject[] = []
+  if (committed) {
+    const present = await select(
+      session,
+      'SELECT TRIGGER_NAME AS name, \'trigger\' AS kind FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = ? UNION ALL SELECT EVENT_NAME, \'event\' FROM information_schema.EVENTS WHERE EVENT_SCHEMA = ?',
+      [dst, dst]
+    ).catch((err: Error) => {
+      errors.push(err.message)
+      return [] as Row[]
+    })
+    const missing = inv.late.filter((o) => !present.some((p) => p.kind === o.kind && same(String(p.name), o.name)))
+    objects = [...inv.restore, ...missing]
+  } else {
+    await run('SET FOREIGN_KEY_CHECKS = 0', '')
+    for (const o of inv.created.filter((c) => touched(c.name))) await run(`DROP ${o.kind.toUpperCase()} IF EXISTS ${qualified(dst, o.name)}`, `${dst}.${o.name}`)
+    const backedUp = new Set(inv.backups.map((b) => b.table))
+    objects = inv.saved.filter((o) => touched(o.name) && (o.kind !== 'table' || backedUp.has(o.name)))
+  }
   let kinds: Record<string, CopyKind> | undefined
   try {
     kinds = await targetKinds(session, [dst])
   } catch (err) {
     errors.push((err as Error).message)
   }
-  if (kinds) {
-    for (const step of restoreSteps(ctx, inv, objects, kinds)) {
-      try {
-        await exec(session, step.sql)
-      } catch (err) {
-        errors.push(`${step.object || step.sql}: ${(err as Error).message}`)
-        report(ctx.job, { log: t('tools.align.restoreFailed', { object: step.object || step.sql, error: (err as Error).message }) })
-      }
-    }
-  }
-  if (inv.collationAltered) {
-    try {
-      await exec(session, `ALTER DATABASE ${quoteIdentifier(dst)} COLLATE ${inv.collation}`)
-      inv.collationAltered = false
-    } catch (err) {
-      errors.push((err as Error).message)
-    }
-  }
-  return errors
+  if (kinds) for (const step of restoreSteps(ctx, inv, objects, kinds)) await run(step.sql, step.object)
+  if (inv.collationAltered) await run(`ALTER DATABASE ${quoteIdentifier(dst)} COLLATE ${inv.collation}`, dst)
+  return { errors, objects }
 }
 
-const duplicateKey = (message: string): string => /for key '([^']+)'/.exec(message)?.[1] ?? message
+/** A failure after the inventory: recovery on a live connection that cannot be interrupted, then the job's error. */
+async function afterFailure(ctx: Context, target: DbSession, inv: Inventory, st: ApplyState, err: unknown): Promise<never> {
+  const { job, writer } = ctx
+  // no KILL from now on, and the ones sent have reached the server before the recovery starts
+  job.cancelers.clear()
+  await Promise.allSettled(ctx.kills)
+  const error = job.cancelled ? t('tools.cancelled') : (err as Error).message
+  const fail = (message: string): never => {
+    if (job.cancelled) job.cancelledMessage = message
+    throw new Error(message)
+  }
+
+  let session: DbSession | undefined = writer.session
+  if (st.inTransaction && !st.committing) {
+    try {
+      await exec(session, 'ROLLBACK')
+    } catch {
+      // the connection may hold the transaction still: killed, the server rolls it back
+      const id = await writer.session.auxThreadId()
+      await writer.session.execute(`KILL ${id}`)
+      writer.session.close()
+      session = undefined
+    }
+  }
+  if (session && !(await alive(session))) session = undefined
+  // the COMMIT was sent and the connection is gone: the rows may be written or not, so nothing is put back
+  if (st.committing && !session) fail(t('tools.align.commitUnknown', { error, file: inv.file }))
+
+  report(job, { message: t('tools.align.recovering'), log: t('tools.align.recovering') })
+  let errors: string[]
+  let objects: SourceObject[] = []
+  try {
+    if (!session) {
+      const fresh = await openPinned(target)
+      ctx.sessions.push(fresh)
+      // the lock of the target's alignments, released with the lost connection
+      const [lock] = await select(fresh, 'SELECT GET_LOCK(?, 10) AS l', [lockName(writer.schema, ctx.lowerCaseNames)])
+      if (Number(lock.l) !== 1) throw new Error(t('tools.align.busy', { schema: writer.schema }))
+      session = fresh
+    }
+    ;({ errors, objects } = await recover(ctx, inv, session, st.committed))
+  } catch (e) {
+    errors = [(e as Error).message]
+  }
+  const left = session && !errors.length ? await dropBackups(ctx, inv, session) : inv.backups.map((b) => b.copy)
+  if (st.committed) {
+    if (!errors.length && !left.length) {
+      await rm(inv.file, { force: true })
+      fail(t('tools.align.failedAfterCommit', { error }))
+    }
+    // the script holds what is still missing, not the tables: their rows are committed
+    await writeRecoveryFile(ctx, inv, objects).catch(() => undefined)
+    fail(t('tools.align.recoveryNeededAfterCommit', { error, file: inv.file }))
+  }
+  if (errors.length || left.length) fail(t('tools.align.recoveryNeeded', { error, file: inv.file }))
+  await rm(inv.file, { force: true })
+  return fail(error)
+}
 
 export function alignApply(job: Job, source: DbSession, target: DbSession, r: AlignRequest): Promise<string> {
   return withSessions(job, source, target, r, true, async (ctx) => {
-    const { reader, writer } = ctx
+    const { writer } = ctx
     const dst = writer.schema
     // 1. inspect (rows of syncRows tables are walked while writing)
     const items = await inspect(ctx, false)
@@ -974,142 +1196,34 @@ export function alignApply(job: Job, source: DbSession, target: DbSession, r: Al
     await preflight(ctx, items)
 
     const [info] = await select(writer.session, 'SELECT DEFAULT_COLLATION_NAME AS c FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?', [dst])
-    const inv: Inventory = { saved: [], restore: [], backups: [], touched: new Set(), collationAltered: false, collation: String(info.c), createDatabase: '' }
+    const inv: Inventory = {
+      saved: [],
+      restore: [],
+      late: [],
+      created: [],
+      backups: [],
+      file: '',
+      touched: new Set(),
+      collationAltered: false,
+      collation: String(info.c),
+      createDatabase: ''
+    }
     // 4. inventory and backups: a failure here drops the backups made and changes nothing else
     await takeInventory(ctx, items, inv)
 
-    const totals = { created: 0, recreated: 0, dropped: 0, inserted: 0, updated: 0, deleted: 0 }
-    let inTransaction = false
-    let committed = false
+    const st: ApplyState = { inTransaction: false, committing: false, committed: false, totals: { created: 0, recreated: 0, dropped: 0, inserted: 0, updated: 0, deleted: 0 } }
     try {
-      // 5. triggers away, so that the writes do not fire them
-      const fold = ctx.lowerCaseNames === 0 ? (s: string): string => s : (s: string): string => s.toLowerCase()
-      const inventoryTriggers = inv.saved.filter((o) => o.kind === 'trigger')
-      for (const trg of inventoryTriggers) {
-        checkCancelled(job)
-        inv.touched.add(fold(`${dst}.${trg.name}`))
-        await exec(writer.session, `DROP TRIGGER IF EXISTS ${qualified(dst, trg.name)}`)
-      }
-
-      // 6. structure
-      let finish: PlanStep[] = []
-      if (r.options.structure) {
-        await exec(writer.session, 'SET FOREIGN_KEY_CHECKS = 0')
-        for (const item of items.filter((i) => i.diff.action === 'drop')) {
-          checkCancelled(job)
-          const o = item.target!
-          inv.touched.add(fold(`${dst}.${o.name}`))
-          report(job, { message: t('tools.align.dropping', { object: `${dst}.${o.name}` }) })
-          await exec(writer.session, `DROP ${o.kind.toUpperCase()} IF EXISTS ${qualified(dst, o.name)}`)
-          totals.dropped++
-        }
-        const built = items.filter((i) => i.diff.action === 'create' || i.diff.action === 'recreate')
-        if (built.length) {
-          const [db] = await select(reader.session, `SHOW CREATE DATABASE ${quoteIdentifier(reader.schema)}`)
-          const plan = buildCopyPlan({
-            schemas: [{ name: reader.schema, ddl: String(db['Create Database']), collation: inv.collation }],
-            objects: built.map((i) => i.sourceObject!),
-            rename: ctx.rename,
-            definers: r.options.definers,
-            existing: 'recreate',
-            structureOnly: false,
-            collations: {},
-            targetKinds: await targetKinds(writer.session, [dst])
-          })
-          for (const w of plan.warnings) report(job, { log: warningText(w) })
-          await runSteps(ctx, inv, plan.structure)
-          finish = plan.finish
-          for (const i of built) totals[i.diff.action === 'create' ? 'created' : 'recreated']++
-        }
-      }
-
-      // 7. rows, in one transaction
-      const rowItems = items.filter(
-        (i) => i.diff.action === 'syncRows' || i.diff.action === 'replaceRows' || (r.options.data && i.kind === 'table' && (i.diff.action === 'create' || i.diff.action === 'recreate'))
-      )
-      const written = rowItems.map((i) => (i.diff.action === 'create' || i.diff.action === 'recreate' ? i.source!.name : i.target!.name))
-      if (rowItems.length) {
-        await exec(writer.session, 'SET NAMES utf8mb4')
-        // UNIQUE_CHECKS = 0 (set by the plan) may let InnoDB miss duplicates
-        await exec(writer.session, 'SET UNIQUE_CHECKS = 1')
-        await exec(writer.session, 'SET FOREIGN_KEY_CHECKS = 0')
-        await exec(writer.session, 'SET sql_mode = ?', [[writer.sqlMode, 'NO_AUTO_VALUE_ON_ZERO'].filter(Boolean).join(',')])
-        await exec(writer.session, "SET time_zone = '+00:00'")
-        await exec(writer.session, 'START TRANSACTION')
-        inTransaction = true
-        for (const item of rowItems) {
-          checkCancelled(job)
-          await exec(writer.session, 'SAVEPOINT dbm_t')
-          const action = item.diff.action
-          if (action === 'syncRows') {
-            try {
-              const counts = await walkRows(ctx, item, true)
-              totals.inserted += counts.insert
-              totals.updated += counts.update
-              totals.deleted += counts.delete
-              continue
-            } catch (err) {
-              if (errno(err) !== 1062) throw err
-              if (!r.options.deleteRows) throw new Error(t('tools.align.uniqueConflict', { table: item.target!.name, key: duplicateKey((err as Error).message) }))
-              // values of UNIQUE keys exchanged between rows: the table is written again as a whole
-              await exec(writer.session, 'ROLLBACK TO SAVEPOINT dbm_t')
-              report(job, { log: t('tools.align.uniqueRewrite', { table: item.target!.name }) })
-            }
-          }
-          let targetTable = item.target?.name ?? item.source!.name
-          if (action === 'create' || action === 'recreate') targetTable = item.source!.name
-          else {
-            const deleted = await exec(writer.session, `DELETE FROM ${qualified(dst, targetTable)}`)
-            totals.deleted += Number(deleted.affectedRows ?? 0)
-          }
-          totals.inserted += await copyRows(ctx, item.source!.name, targetTable, item.columns)
-        }
-      }
-
-      // 8. orphans, then COMMIT
-      if (inTransaction) {
-        report(job, { message: t('tools.align.checkingOrphans') })
-        const found = await orphans(ctx, written)
-        if (found.length) throw new Error(t('tools.align.orphans', { constraints: found.join(', ') }))
-        await exec(writer.session, 'COMMIT')
-        inTransaction = false
-      }
-      committed = true
-
-      // 9. triggers and events of the source, the triggers taken away, then the backups and the recovery file go
+      const finish = await writeTarget(ctx, items, inv, st)
+      st.committed = true
+      // 9. triggers and events of the source, then the triggers taken away
       await runSteps(ctx, inv, finish)
       await runSteps(ctx, inv, restoreSteps(ctx, inv, inv.restore))
     } catch (err) {
-      // recovery is not interrupted by the cancellation that may have caused it
-      for (const c of [...job.cancelers]) job.cancelers.delete(c)
-      const message = job.cancelled ? t('tools.cancelled') : (err as Error).message
-      let session: DbSession = writer.session
-      if (inTransaction) await exec(session, 'ROLLBACK').catch(() => undefined)
-      let errors: string[]
-      try {
-        try {
-          await exec(session, 'SELECT 1')
-        } catch {
-          // the writer's connection is gone, and its transaction with it
-          session = await openPinned(target)
-          ctx.sessions.push(session)
-        }
-        report(job, { message: t('tools.align.recovering'), log: t('tools.align.recovering') })
-        errors = await recover(ctx, inv, session, committed)
-      } catch (e) {
-        errors = [(e as Error).message]
-      }
-      if (!errors.length && (await dropBackups(ctx, inv, session))) {
-        if (inv.file) await rm(inv.file, { force: true })
-        if (job.cancelled) job.cancelledMessage = message
-        throw err
-      }
-      const failed = t('tools.align.recoveryNeeded', { error: message, file: inv.file ?? '' })
-      if (job.cancelled) job.cancelledMessage = failed
-      throw new Error(failed)
+      return afterFailure(ctx, target, inv, st, err)
     }
-    await dropBackups(ctx, inv, writer.session)
-    if (inv.file) await rm(inv.file, { force: true })
-    return t('tools.align.done', { ...totals })
+    const left = await dropBackups(ctx, inv, writer.session)
+    if (left.length) return t('tools.align.doneBackupsLeft', { ...st.totals, tables: left.join(', '), file: inv.file })
+    await rm(inv.file, { force: true })
+    return t('tools.align.done', { ...st.totals })
   })
 }

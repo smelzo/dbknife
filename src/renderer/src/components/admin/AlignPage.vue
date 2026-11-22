@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ArrowRight, Check, Plus, X } from 'lucide-vue-next'
+import { ArrowRight, Check, Copy, Plus, X } from 'lucide-vue-next'
 import type { AlignEnd, Alignment } from '@shared/types'
 import type { Workspace } from '@/workspace/workspace'
 import { alertError, confirm } from '@/dialogs'
@@ -46,6 +46,13 @@ async function reload(): Promise<void> {
 const connectionName = (end: AlignEnd): string => alignConnection(props.ws, end.connectionId)?.name ?? t('admin.align.connectionMissing')
 const environmentOf = (end: AlignEnd) => alignConnection(props.ws, end.connectionId)?.environment
 const when = (at: number): string => new Date(at).toLocaleString(formatLocale())
+
+/** The `dbknife` command is installed on macOS and Linux only. */
+const showCommand = !navigator.userAgent.includes('Windows')
+/** POSIX single quotes: the name pastes into sh/zsh as it is, quotes and spaces included. */
+const shellQuote = (s: string): string => `'${s.replaceAll("'", "'\\''")}'`
+const command = (a: Alignment): string => `dbknife --runjob ${shellQuote(a.name)}`
+const copyCommand = (a: Alignment): Promise<void> => navigator.clipboard.writeText(command(a))
 
 function edit(draft: Partial<Alignment>, compare = false): void {
   // a copy without the reactive proxies: the editor must not change the list
@@ -225,6 +232,15 @@ onUnmounted(closeRunSessions)
           <button class="primary" :disabled="job.running" @click="runNow(selected)">{{ t('admin.align.runNow') }}</button>
           <button :disabled="job.running" @click="edit(selected, true)">{{ t('admin.align.compare') }}</button>
         </div>
+
+        <section v-if="showCommand">
+          <h3>{{ t('admin.align.command') }}</h3>
+          <div class="command">
+            <code class="selectable">{{ command(selected) }}</code>
+            <button class="icon-btn" :title="t('admin.align.copyCommand')" @click="copyCommand(selected)"><Copy :size="14" /></button>
+          </div>
+          <p class="hint muted">{{ t('admin.align.commandHint') }}</p>
+        </section>
 
         <section v-if="runFor === selected.id && job.message" class="progress-section">
           <div class="row">
@@ -453,6 +469,29 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.command {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.command code {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--fs-small);
 }
 
 progress {

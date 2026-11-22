@@ -1,0 +1,21 @@
+#!/bin/sh
+# dbknife: DBKnife's command line, linked into the PATH from the app menu
+# (src/main/cli-install.ts). Packaged at DBKnife.app/Contents/Resources/cli/dbknife.
+
+# follows the links up to this file inside the bundle
+self=$0
+while [ -L "$self" ]; do
+  link=$(readlink "$self")
+  case $link in /*) self=$link ;; *) self=$(dirname "$self")/$link ;; esac
+done
+contents=$(cd "$(dirname "$self")/../.." && pwd) || exit 1 # DBKnife.app/Contents
+
+# no arguments: opens the app, or brings the running one to the front
+[ $# -eq 0 ] && exec open -a "$(dirname "$contents")"
+case $1 in
+  --runjob | --runjob=*) exec "$contents/MacOS/DBKnife" "$@" ;;
+  *)
+    echo 'Usage: dbknife [--runjob <name>]' >&2
+    exit 2
+    ;;
+esac

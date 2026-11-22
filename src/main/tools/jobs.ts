@@ -15,9 +15,17 @@ import { expandHome, type DbSession } from '../db/session'
 // Background jobs of the data export/import pages: the client tool
 // processes, their progress and cancellation.
 
+/** Where a job's progress goes: a window's renderer, or the command line. */
+export type ProgressSink = (p: ToolProgress) => void
+
+/** The sink of a window: its renderer gets the progress until it is closed. */
+export const toSender = (wc: WebContents): ProgressSink => (p) => {
+  if (!wc.isDestroyed()) wc.send('tools:progress', p)
+}
+
 export interface Job {
   id: string
-  sender: WebContents
+  send: ProgressSink
   /** The running tool processes, killed when the job is cancelled. */
   children: Set<ChildProcess>
   /** Stop the job's other work (e.g. a running statement), called when the job is cancelled. */
@@ -32,7 +40,7 @@ export const jobs = new Map<string, Job>()
 
 export function report(job: Job, p: Omit<ToolProgress, 'jobId' | 'progress'> & { progress?: number }): void {
   if (p.progress !== undefined) job.progress = p.progress
-  if (!job.sender.isDestroyed()) job.sender.send('tools:progress', { ...p, jobId: job.id, progress: job.progress })
+  job.send({ ...p, jobId: job.id, progress: job.progress })
 }
 
 export function checkCancelled(job: Job): void {
@@ -40,8 +48,8 @@ export function checkCancelled(job: Job): void {
 }
 
 /** Runs a job in the background, reporting its outcome; returns the job id at once. */
-export function startJob(sender: WebContents, work: (job: Job) => Promise<string>): string {
-  const job: Job = { id: randomUUID(), sender, children: new Set(), cancelers: new Set(), cancelled: false, progress: 0 }
+export function startJob(send: ProgressSink, work: (job: Job) => Promise<string>): string {
+  const job: Job = { id: randomUUID(), send, children: new Set(), cancelers: new Set(), cancelled: false, progress: 0 }
   jobs.set(job.id, job)
   const run = async (): Promise<void> => {
     try {
@@ -57,6 +65,15 @@ export function startJob(sender: WebContents, work: (job: Job) => Promise<string
   }
   setImmediate(() => void run())
   return job.id
+}
+
+/** Cancels a running job: its tool processes are killed and its other work stopped; nothing when it has ended. */
+export function cancelJob(id: string): void {
+  const job = jobs.get(id)
+  if (!job) return
+  job.cancelled = true
+  for (const child of job.children) child.kill()
+  for (const cancel of job.cancelers) cancel()
 }
 
 /** Runs `<path> <args>` with a timeout (5 s by default); its stdout, or undefined when it fails. */

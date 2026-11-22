@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, shell, type KeyboardEvent, type MenuItemConstructorOptions } from 'electron'
 import type { MenuState } from '@shared/api'
 import { t } from '@shared/i18n'
+import { installCliCommand } from './cli-install'
 import { checkForUpdates, updateChecking, updateReady, updatesEnabled } from './updater'
 
 const limitChoices = [0, 10, 50, 100, 200, 300, 400, 500, 1000, 2000, 5000, 10000, 50000]
@@ -44,6 +45,7 @@ export function buildMenu(): void {
         version
           ? { ...item(t('app.update.restart', { version }), 'app.restart'), id: 'app.restartToUpdate' }
           : { label: t('menu.app.checkForUpdates'), click: () => checkForUpdates(), enabled: !updateChecking(), visible: updatesEnabled() },
+        { label: t('menu.app.installCli'), click: () => void installCliCommand(), visible: isMac && app.isPackaged },
         { type: 'separator' },
         item(t('menu.app.preferences'), 'app.preferences', 'CmdOrCtrl+,'),
         { type: 'separator' },
